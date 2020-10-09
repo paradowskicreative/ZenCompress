@@ -208,7 +208,7 @@ namespace UnityGLTF
 		/// </summary>
 		/// <param name="input">Stream to copy from</param>
 		/// <param name="output">Stream to copy to.</param>
-		private static void CopyStream(Stream input, BinaryWriter output)
+		public static void CopyStream(Stream input, BinaryWriter output)
 		{
 			byte[] buffer = new byte[8 * 1024];
 			int length;
@@ -226,7 +226,7 @@ namespace UnityGLTF
 		/// space (' ').</param>
 		/// <param name="boundary">The boundary to align with, in bytes.
 		/// </param>
-		private static void AlignToBoundary(Stream stream, byte pad = (byte)' ', uint boundary = 4)
+		public static void AlignToBoundary(Stream stream, byte pad = (byte)' ', uint boundary = 4)
 		{
 			uint currentLength = (uint)stream.Length;
 			uint newLength = CalculateAlignment(currentLength, boundary);
