@@ -144,12 +144,12 @@ namespace UnityGLTF
 			_shouldUseInternalBufferForImages = true;
 			Stream binStream = new MemoryStream();
 			Stream jsonStream = new MemoryStream();
-
+			
 			_bufferWriter = new BinaryWriter(binStream);
 
 			TextWriter jsonWriter = new StreamWriter(jsonStream, Encoding.ASCII);
 
-			_root.Scene = ExportScene(fileName, _rootTransforms);
+			_root.Scene = ExportScene(fileName, _rootTransforms); // Buffer stuff happens here!
 
 			_buffer.ByteLength = (uint)_bufferWriter.BaseStream.Length;
 
