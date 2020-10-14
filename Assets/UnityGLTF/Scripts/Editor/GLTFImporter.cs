@@ -334,7 +334,7 @@ namespace UnityGLTF
 
         private GameObject CreateGLTFScene(string projectFilePath)
         {
-			ILoader fileLoader = new FileLoader(Path.GetDirectoryName(projectFilePath));
+			ILoader fileLoader = new FileLoader(Path.GetDirectoryName(projectFilePath)) as ILoader;
 			using (var stream = File.OpenRead(projectFilePath))
 			{
 				GLTFRoot gLTFRoot;

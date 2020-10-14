@@ -5,7 +5,7 @@ using CullMode = UnityEngine.Rendering.CullMode;
 
 namespace UnityGLTF
 {
-	class MetalRoughMap : MetalRough2StandardMap
+	public class MetalRoughMap : MetalRough2StandardMap
 	{
 		private Vector2 metalRoughOffset = new Vector2(0, 0);
 
@@ -84,6 +84,12 @@ namespace UnityGLTF
 		{
 			get { return 0; }
 			set { return; }
+		}
+
+		public override double RoughnessFactor
+		{
+			get { return _material.GetFloat("_Glossiness"); }
+			set { _material.SetFloat("_Glossiness", (float)value); }
 		}
 
 		public override IUniformMap Clone()

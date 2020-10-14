@@ -1,26 +1,27 @@
 using System;
-using System.Collections;
+using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Net.Http;
 using System.Threading.Tasks;
-using GLTF;
-using GLTF.Schema;
 using UnityEngine;
 using UnityGLTF.Loader;
 
 namespace UnityGLTF
 {
-
-	/// <summary>
-	/// Component to load a GLTF scene with
-	/// </summary>
-	public class GLTFComponent : MonoBehaviour
+    /// <summary>
+    /// Component to load a GLTF scene with
+    /// </summary>
+    public class GLTFComponent : MonoBehaviour
 	{
 		public string GLTFUri = null;
 		public bool Multithreaded = true;
 		public bool UseStream = false;
 		public bool AppendStreamingAssets = true;
 		public bool PlayAnimationOnLoad = true;
+        public ImporterFactory Factory = null;
+
+        public IEnumerable<Animation> Animations { get; private set; }
 
 		[SerializeField]
 		private bool loadOnStart = true;
@@ -35,8 +36,7 @@ namespace UnityGLTF
 		public int MaximumLod = 300;
 		public int Timeout = 8;
 		public GLTFSceneImporter.ColliderType Collider = GLTFSceneImporter.ColliderType.None;
-
-		private AsyncCoroutineHelper asyncCoroutineHelper;
+		public GameObject LastLoadedScene { get; private set; } = null;
 
 		[SerializeField]
 		private Shader shaderOverride = null;
@@ -66,43 +66,45 @@ namespace UnityGLTF
 
 		public async Task Load()
 		{
-			asyncCoroutineHelper = gameObject.GetComponent<AsyncCoroutineHelper>() ?? gameObject.AddComponent<AsyncCoroutineHelper>();
+			var importOptions = new ImportOptions
+			{
+				AsyncCoroutineHelper = gameObject.GetComponent<AsyncCoroutineHelper>() ?? gameObject.AddComponent<AsyncCoroutineHelper>()
+			};
+
 			GLTFSceneImporter sceneImporter = null;
-			ILoader loader = null;
 			try
 			{
+                Factory = Factory ?? ScriptableObject.CreateInstance<DefaultImporterFactory>();
+
 				if (UseStream)
 				{
-					// Path.Combine treats paths that start with the separator character
-					// as absolute paths, ignoring the first path passed in. This removes
-					// that character to properly handle a filename written with it.
-					GLTFUri = GLTFUri.TrimStart(new[] { Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar });
 					string fullPath;
 					if (AppendStreamingAssets)
 					{
-						fullPath = Path.Combine(Application.streamingAssetsPath, GLTFUri);
+						// Path.Combine treats paths that start with the separator character
+						// as absolute paths, ignoring the first path passed in. This removes
+						// that character to properly handle a filename written with it.
+						fullPath = Path.Combine(Application.streamingAssetsPath, GLTFUri.TrimStart(new[] { Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar }));
 					}
 					else
 					{
 						fullPath = GLTFUri;
 					}
 					string directoryPath = URIHelper.GetDirectoryName(fullPath);
-					loader = new FileLoader(directoryPath);
-					sceneImporter = new GLTFSceneImporter(
+					importOptions.DataLoader = new FileLoader(directoryPath);
+					sceneImporter = Factory.CreateSceneImporter(
 						Path.GetFileName(GLTFUri),
-						loader,
-						asyncCoroutineHelper
+						importOptions
 						);
 				}
 				else
 				{
 					string directoryPath = URIHelper.GetDirectoryName(GLTFUri);
-					loader = new WebRequestLoader(directoryPath);
+					importOptions.DataLoader = new WebRequestLoader(directoryPath);
 
-					sceneImporter = new GLTFSceneImporter(
+					sceneImporter = Factory.CreateSceneImporter(
 						URIHelper.GetFileFromUri(new Uri(GLTFUri)),
-						loader,
-						asyncCoroutineHelper
+						importOptions
 						);
 
 				}
@@ -137,22 +139,23 @@ namespace UnityGLTF
 					}
 				}
 
-				if (PlayAnimationOnLoad)
+				print("model loaded with vertices: " + sceneImporter.Statistics.VertexCount.ToString() + ", triangles: " + sceneImporter.Statistics.TriangleCount.ToString());
+				LastLoadedScene = sceneImporter.LastLoadedScene;
+
+				Animations = sceneImporter.LastLoadedScene.GetComponents<Animation>();
+
+				if (PlayAnimationOnLoad && Animations.Any())
 				{
-					Animation[] animations = sceneImporter.LastLoadedScene.GetComponents<Animation>();
-					foreach (Animation anim in animations)
-					{
-						anim.Play();
-					}
+					Animations.FirstOrDefault().Play();
 				}
 			}
 			finally
 			{
-				if(loader != null)
+				if(importOptions.DataLoader != null)
 				{
 					sceneImporter?.Dispose();
 					sceneImporter = null;
-					loader = null;
+					importOptions.DataLoader = null;
 				}
 			}
 		}

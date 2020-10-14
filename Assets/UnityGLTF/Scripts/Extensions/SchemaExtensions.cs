@@ -266,6 +266,14 @@ namespace UnityGLTF.Extensions
 			return outVecArr;
 		}
 
+		public static void ToUnityVector2Raw(this GLTF.Math.Vector2[] inArr, Vector2[] outArr, int offset = 0)
+		{
+			for (int i = 0; i < inArr.Length; i++)
+			{
+				outArr[offset + i] = inArr[i].ToUnityVector2Raw();
+			}
+		}
+
 		public static Vector3 ToUnityVector3Raw(this GLTF.Math.Vector3 vec3)
 		{
 			return new Vector3(vec3.X, vec3.Y, vec3.Z);
@@ -281,6 +289,14 @@ namespace UnityGLTF.Extensions
 			return outVecArr;
 		}
 
+		public static void ToUnityVector3Raw(this GLTF.Math.Vector3[] inArr, Vector3[] outArr, int offset = 0)
+		{
+			for (int i = 0; i < inArr.Length; i++)
+			{
+				outArr[offset + i] = inArr[i].ToUnityVector3Raw();
+			}
+		}
+
 		public static Vector4 ToUnityVector4Raw(this GLTF.Math.Vector4 vec4)
 		{
 			return new Vector4(vec4.X, vec4.Y, vec4.Z, vec4.W);
@@ -294,6 +310,14 @@ namespace UnityGLTF.Extensions
 				outVecArr[i] = inVecArr[i].ToUnityVector4Raw();
 			}
 			return outVecArr;
+		}
+
+		public static void ToUnityVector4Raw(this GLTF.Math.Vector4[] inArr, Vector4[] outArr, int offset = 0)
+		{
+			for (int i = 0; i < inArr.Length; i++)
+			{
+				outArr[offset + i] = inArr[i].ToUnityVector4Raw();
+			}
 		}
 
 		public static UnityEngine.Color ToUnityColorRaw(this GLTF.Math.Color color)
@@ -314,6 +338,14 @@ namespace UnityGLTF.Extensions
 				outColorArr[i] = inColorArr[i].ToUnityColorRaw();
 			}
 			return outColorArr;
+		}
+
+		public static void ToUnityColorRaw(this GLTF.Math.Color[] inArr, Color[] outArr, int offset = 0)
+		{
+			for (int i = 0; i < inArr.Length; i++)
+			{
+				outArr[offset + i] = inArr[i].ToUnityColorRaw();
+			}
 		}
 
 		public static int[] ToIntArrayRaw(this uint[] uintArr)
@@ -445,33 +477,14 @@ namespace UnityGLTF.Extensions
 		/// Rewinds the indicies into Unity coordinate space from glTF space
 		/// </summary>
 		/// <param name="attributeAccessor">The attribute accessor to modify</param>
-		public static void FlipFaces(ref AttributeAccessor attributeAccessor)
+		public static void FlipTriangleFaces(int[] indices)
 		{
-			for (int i = 0; i < attributeAccessor.AccessorContent.AsTriangles.Length; i += 3)
+			for (int i = 0; i < indices.Length; i += 3)
 			{
-				uint temp = attributeAccessor.AccessorContent.AsUInts[i];
-				attributeAccessor.AccessorContent.AsUInts[i] = attributeAccessor.AccessorContent.AsUInts[i + 2];
-				attributeAccessor.AccessorContent.AsUInts[i + 2] = temp;
+				int temp = indices[i];
+				indices[i] = indices[i + 2];
+				indices[i + 2] = temp;
 			}
-		}
-
-		/// <summary>
-		/// Rewinds the indices from glTF space to Unity space
-		/// </summary>
-		/// <param name="triangles">The indices to copy and modify</param>
-		/// <returns>Indices in glTF space that are copied</returns>
-		public static int[] FlipFacesAndCopy(int[] triangles)
-		{
-			int[] returnArr = new int[triangles.Length];
-			for (int i = 0; i < triangles.Length; i += 3)
-			{
-				int temp = triangles[i];
-				returnArr[i] = triangles[i + 2];
-				returnArr[i + 1] = triangles[i + 1];
-				returnArr[i + 2] = temp;
-			}
-
-			return returnArr;
 		}
 
 		public static Matrix4x4 ToUnityMatrix4x4(this GLTF.Math.Matrix4x4 matrix)

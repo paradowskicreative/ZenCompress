@@ -15,14 +15,10 @@ using System.Threading.Tasks;
 
 namespace UnityGLTF.Loader
 {
-	public class WebRequestLoader : ILoader
+	public class WebRequestLoader : IDataLoader
 	{
-		public Stream LoadedStream { get; private set; }
-
-		public bool HasSyncLoadMethod => false;
-
 		private readonly HttpClient httpClient = new HttpClient();
-		private Uri baseAddress;
+		private readonly Uri baseAddress;
 
 		public WebRequestLoader(string rootUri)
 		{
@@ -32,7 +28,7 @@ namespace UnityGLTF.Loader
 			baseAddress = new Uri(rootUri);
 		}
 
-		public async Task LoadStream(string gltfFilePath)
+		public async Task<Stream> LoadStreamAsync(string gltfFilePath)
 		{
 			if (gltfFilePath == null)
 			{
@@ -52,9 +48,9 @@ namespace UnityGLTF.Loader
 			catch (TaskCanceledException)
 			{
 #if WINDOWS_UWP
-				throw new Exception($"Connection timeout: {baseAddress}");
+				throw new Exception("Connection timeout");
 #else
-				throw new HttpRequestException($"Connection timeout: {baseAddress}");
+				throw new HttpRequestException("Connection timeout");
 #endif
 			}
 
@@ -62,18 +58,14 @@ namespace UnityGLTF.Loader
 
 			// HACK: Download the whole file before returning the stream
 			// Ideally the parsers would wait for data to be available, but they don't.
-			LoadedStream = new MemoryStream((int?)response.Content.Headers.ContentLength ?? 5000);
+			var result = new MemoryStream((int?)response.Content.Headers.ContentLength ?? 5000);
 #if WINDOWS_UWP
-			await response.Content.WriteToStreamAsync((IOutputStream)LoadedStream);
+			await response.Content.WriteToStreamAsync(result.AsOutputStream());
 #else
-			await response.Content.CopyToAsync(LoadedStream);
+			await response.Content.CopyToAsync(result);
 #endif
 			response.Dispose();
-		}
-
-		public void LoadStreamSync(string jsonFilePath)
-		{
-			throw new NotImplementedException();
+			return result;
 		}
 
 #if !WINDOWS_UWP
