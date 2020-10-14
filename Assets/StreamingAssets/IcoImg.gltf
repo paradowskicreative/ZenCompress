@@ -1,4 +1,6 @@
 {
+    "extensionsUsed":["MOZ_HUBS_texture_basis"],
+    "extensionsRequired":["MOZ_HUBS_texture_basis"],
     "asset" : {
         "generator" : "Khronos glTF Blender I/O v1.3.48",
         "version" : "2.0"
@@ -55,14 +57,28 @@
     ],
     "textures" : [
         {
-            "source" : 0
+	    "sampler": 0,
+            "extensions": {
+		"MOZ_HUBS_texture_basis": {
+			"source" : 0
+		}
+	    }
         }
+    ],
+    "samplers": [					
+	{
+		"magFilter": 9729,
+		"minFilter": 9729,
+		"wrapS": 33071,
+		"wrapT": 33071,
+		"name": "sampler_0"
+	}
     ],
     "images" : [
         {
-            "mimeType" : "image/jpeg",
+            "mimeType" : "image/basis",
             "name" : "TexturesCom_Grass0133_1_seamless_L",
-            "uri" : "tex/TexturesCom_Grass0133_1_seamless_L.jpg"
+            "uri" : "tex/TexturesCom_Grass0133_1_seamless_L.basis"
         }
     ],
     "accessors" : [

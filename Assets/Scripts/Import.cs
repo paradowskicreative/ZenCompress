@@ -10,9 +10,10 @@ using System.IO;
 using System.Threading.Tasks;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
-using System;
+using System.Threading;
 using System.Text.RegularExpressions;
 using System.Linq;
+using System.Diagnostics;
 
 
 public class Import : MonoBehaviour
@@ -28,11 +29,11 @@ public class Import : MonoBehaviour
     public List<string> images = new List<string>();
 
     private const uint MagicGLTF = 0x46546C67;
-		private const uint Version = 2;
-		private const uint MagicJson = 0x4E4F534A;
-		private const uint MagicBin = 0x004E4942;
-		private const int GLTFHeaderSize = 12;
-		private const int SectionHeaderSize = 8;
+    private const uint Version = 2;
+    private const uint MagicJson = 0x4E4F534A;
+    private const uint MagicBin = 0x004E4942;
+    private const int GLTFHeaderSize = 12;
+    private const int SectionHeaderSize = 8;
 
     protected struct GLBStream
     {
@@ -54,20 +55,27 @@ public class Import : MonoBehaviour
     
     public GLTFRoot gltfRoot = new GLTFRoot();
     public GLTFRoot glbRoot = new GLTFRoot();
+    private GLTFBuffer buffer;
+    private BufferId bufferId;
     protected GLBStream gltfStream;
+    private string directoryPath;
+
+    private Process process;
     
     // Start is called before the first frame update
     private async void Start()
     {
-       await Load();
+        var time = Time.time;
+        await Load();
+        print("Loaded and exported in " + (Time.time - time) + " seconds.");
     }
 
     public async Task Load() {
         GLTFUri = GLTFUri.TrimStart(new[] { Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar });
         string fullPath;
-        fullPath = Path.Combine(Application.streamingAssetsPath, GLTFUri);
-        string directoryPath = URIHelper.GetDirectoryName(fullPath);
-        // Debug.Log(directoryPath);
+        fullPath = Path.Combine(Application.streamingAssetsPath, GLTFUri);//.Replace('/', '\\');
+        directoryPath = URIHelper.GetDirectoryName(fullPath);//.Replace('/', '\\');
+        // print(directoryPath);
         // var asyncCoroutineHelper = gameObject.AddComponent<AsyncCoroutineHelper>();
 		gltfLoader = new FileLoader(directoryPath);
         // var sceneImporter = new GLTFSceneImporter(Path.GetFileName(GLTFUri), gltfLoader, asyncCoroutineHelper);
@@ -77,14 +85,37 @@ public class Import : MonoBehaviour
 
         await LoadJson(fullPath);
         glbRoot = new GLTFRoot(gltfRoot);
+        buffer = new GLTFBuffer();
+        glbRoot.Buffers = new List<GLTFBuffer>();
+        bufferId = new BufferId {
+            Id = glbRoot.Buffers.Count,
+            Root = glbRoot
+        };
+        glbRoot.Buffers.Add(buffer);
         glbRoot.IsGLB = true;
-        foreach(var buffer in glbRoot.Buffers) {
-            buffer.Uri = null;
+
+        if(glbRoot.Samplers == null)
+            glbRoot.Samplers = new List<Sampler>();
+        
+        Sampler sampler;
+        if(glbRoot.Samplers.Count == 0) {
+            sampler = new Sampler {
+                MagFilter = MagFilterMode.Linear,
+                MinFilter = MinFilterMode.Nearest,
+                WrapS = GLTF.Schema.WrapMode.Repeat,
+                WrapT = GLTF.Schema.WrapMode.Repeat
+            };
+
+            glbRoot.Samplers.Add(sampler);
+        } else {
+            foreach(var smplr in glbRoot.Samplers) {
+                smplr.MinFilter = MinFilterMode.Nearest;
+            }
         }
+        
         if(!gltfRoot.IsGLB) {
             var binPath = Path.Combine(directoryPath, gltfRoot.Buffers[0].Uri);
             binLoader = new FileLoader(binPath);
-            // Debug.Log(binPath);
             await LoadBin(binPath);
         }
         imgLoader = new FileLoader(directoryPath);
@@ -100,26 +131,29 @@ public class Import : MonoBehaviour
     }
 
     private async Task AddImage(GLTFImage image, BinaryWriter output, FileLoader loader, int bufferViewId, uint additionalLength) {
+        print("Adding '" + image.Uri + "' to .glb...");
         await loader.LoadStream(image.Uri);
         loader.LoadedStream.Position = 0;
         uint offset = (uint)output.BaseStream.Position + additionalLength;
-        Debug.Log("Offset: " + offset);
-        var length = (uint)loader.LoadedStream.Length;
-        Debug.Log("Length: " + length);
+        // print("Offset: " + offset);
+        var length = GLTFSceneExporter.CalculateAlignment((uint)loader.LoadedStream.Length, 4);
+        // print("Length: " + length);
         GLTFSceneExporter.CopyStream(loader.LoadedStream, output);
-
+        // length = GLTFSceneExporter.CalculateAlignment(length, 4);
         var bufferImg = glbRoot.Images.First((img) => img.Uri == image.Uri);
         bufferImg.Uri = null;
-        bufferImg.BufferView = new BufferViewId();
-        bufferImg.BufferView.Id = bufferViewId;
-        bufferImg.BufferView.Root = glbRoot;
+        bufferImg.BufferView = new BufferViewId{
+            Id = bufferViewId,
+            Root = glbRoot
+        };
+        
 
-        var bufferView = new BufferView();
-        bufferView.Buffer = new BufferId();
-        bufferView.Buffer.Id = 0; // Temp
-        bufferView.Buffer.Root = glbRoot;
-        bufferView.ByteLength = length;
-        bufferView.ByteOffset = offset;
+        var bufferView = new BufferView {
+            Buffer = bufferId,
+            ByteLength = length,
+            ByteOffset = offset
+        };
+        
         glbRoot.BufferViews.Add(bufferView);
     }
 
@@ -133,23 +167,32 @@ public class Import : MonoBehaviour
         var bufferWriter = new BinaryWriter(binStream);
         var imgWriter = new BinaryWriter(imgStream);
         var jsonWriter = new StreamWriter(jsonStream, Encoding.ASCII) as TextWriter;
-        var buffer = new GLTFBuffer();
+        // var buffer = new GLTFBuffer();
 
         binLoader.LoadedStream.Position = 0;
         GLTFSceneExporter.CopyStream(binLoader.LoadedStream, bufferWriter);
+        foreach(var image in glbRoot.Images) {
+            if(image.MimeType == null || image.MimeType == "") {
+                var ext = image.Uri.Split('.');
+                image.MimeType = "image/" + ext[ext.Length - 1].ToLower();
+            }
+        }
+
+        await Convert(ThreadingUtility.QuitToken);
 
         var preImgByteLength = (uint)bufferWriter.BaseStream.Length;
         imageWriter = new BinaryWriter(imgStream);
         var currentBufferView = glbRoot.BufferViews.Count - 1;
         if(gltfRoot.Images != null) {
-            foreach(var image in gltfRoot.Images) {
+            foreach(var image in glbRoot.Images) {
                 currentBufferView++;
                 await AddImage(image, imageWriter, imgLoader, currentBufferView, preImgByteLength);
             }
         }
-
+        
+        GLTFSceneExporter.AlignToBoundary(imgStream, 0x00);
         buffer.ByteLength = (uint)bufferWriter.BaseStream.Length + (uint)imgWriter.BaseStream.Length;
-        glbRoot.Serialize(jsonWriter, false);
+        glbRoot.Serialize(jsonWriter, true);
 
         bufferWriter.Flush();
         imageWriter.Flush();
@@ -157,6 +200,7 @@ public class Import : MonoBehaviour
 
         GLTFSceneExporter.AlignToBoundary(jsonStream);
         GLTFSceneExporter.AlignToBoundary(binStream, 0x00);
+        
 
         int glbLength = (int)(GLTFHeaderSize + SectionHeaderSize +
             jsonStream.Length + SectionHeaderSize + binStream.Length + imgStream.Length);
@@ -165,7 +209,6 @@ public class Import : MonoBehaviour
         {
 
             BinaryWriter writer = new BinaryWriter(glbFile);
-            compiledStream.Position = 0;
           
             writer.Write(MagicGLTF);
             writer.Write(Version);
@@ -177,7 +220,7 @@ public class Import : MonoBehaviour
             jsonStream.Position = 0;
             GLTFSceneExporter.CopyStream(jsonStream, writer);
 
-            writer.Write((int)binStream.Length);
+            writer.Write((int)binStream.Length + (int)imgStream.Length);
             writer.Write(MagicBin);
 
             binStream.Position = 0;
@@ -204,7 +247,7 @@ public class Import : MonoBehaviour
         GLTFParser.ParseJson(compiledStream, out gltfRoot, 0);
 
         // var glb = GLBBuilder.ConstructFromGLB(gltfRoot, gltfStream.Stream);
-        // Debug.Log(glb.Header.FileLength);
+        // print(glb.Header.FileLength);
     }
 
     private async Task LoadBin(string binFilePath) {
@@ -218,15 +261,39 @@ public class Import : MonoBehaviour
 
     }
 
-    private void Convert() {
-        foreach(var image in gltfRoot.Images) {
+    private async Task Convert(CancellationToken token) {
+
+        foreach(var image in glbRoot.Images) {
+            token.ThrowIfCancellationRequested();
+            image.Uri = image.Uri.Replace("%20", " ");
+            print("Converting image '" + image.Uri + "' to BASIS...");
+            var ttc = Time.time;
+            // var pre = "/C ";
+            var exe = Path.Combine(Application.streamingAssetsPath, "basisu.exe");//.Replace('/', '\\');
+
+            var uriSplit = image.Uri.Split(new char[] {'\\', '/'}).ToList();
+            var fileName = uriSplit[uriSplit.Count - 1];
+            // print(fileName);
+            var outputDir = Path.Combine(directoryPath, image.Uri.Substring(0, image.Uri.Length - fileName.Length));
+            // print(outputDir);
+            
+
+            var args = "-output_path " + outputDir + " -file " + "\"" + Path.Combine(directoryPath, image.Uri) + "\"";//.Replace('/', '\\');
+            // print(args);
+            // args = args.Replace("%20", " ");
+            // print(args);
+
+            await RunProcessAsync(exe, args);
             var ext = image.MimeType.ToLower().Replace("image/", "");
             image.MimeType = "image/basis";
             Regex rgx = new Regex(@"\.(?:.(?!\.))+$");
             image.Uri = image.Uri.Replace(rgx.Match(image.Uri).Value, ".basis");
+            ttc = Time.time - ttc;
+            print("Finished in " + ttc + " sec");
+            // print(image.Uri);
         }
 
-        foreach(var texture in gltfRoot.Textures) {
+        foreach(var texture in glbRoot.Textures) {
             var moz = new MozHubsTextureBasisExtension(texture.Source);
 
             if(texture.Extensions == null)
@@ -234,18 +301,25 @@ public class Import : MonoBehaviour
 
             texture.Extensions.Add(MozHubsTextureBasisExtensionFactory.EXTENSION_NAME, moz);
             texture.Source = null;
+
+            if(texture.Sampler == null) {
+                texture.Sampler = new SamplerId();
+                texture.Sampler.Id = 0;
+            }
         }
-        if(gltfRoot.ExtensionsUsed == null)
-            gltfRoot.ExtensionsUsed = new List<string>();
 
-        if(gltfRoot.ExtensionsRequired == null)
-            gltfRoot.ExtensionsRequired = new List<string>();
+        
+        if(glbRoot.ExtensionsUsed == null)
+            glbRoot.ExtensionsUsed = new List<string>();
 
-        if(!gltfRoot.ExtensionsUsed.Contains(MozHubsTextureBasisExtensionFactory.EXTENSION_NAME))
-            gltfRoot.ExtensionsUsed.Add(MozHubsTextureBasisExtensionFactory.EXTENSION_NAME);
+        if(glbRoot.ExtensionsRequired == null)
+            glbRoot.ExtensionsRequired = new List<string>();
 
-        if(!gltfRoot.ExtensionsRequired.Contains(MozHubsTextureBasisExtensionFactory.EXTENSION_NAME))
-            gltfRoot.ExtensionsRequired.Add(MozHubsTextureBasisExtensionFactory.EXTENSION_NAME);
+        if(!glbRoot.ExtensionsUsed.Contains(MozHubsTextureBasisExtensionFactory.EXTENSION_NAME))
+            glbRoot.ExtensionsUsed.Add(MozHubsTextureBasisExtensionFactory.EXTENSION_NAME);
+
+        if(!glbRoot.ExtensionsRequired.Contains(MozHubsTextureBasisExtensionFactory.EXTENSION_NAME))
+            glbRoot.ExtensionsRequired.Add(MozHubsTextureBasisExtensionFactory.EXTENSION_NAME);
         
     }
 
@@ -262,7 +336,7 @@ public class Import : MonoBehaviour
 
         TextWriter jsonWriter = new StreamWriter(jsonStream, Encoding.ASCII);
 
-        // Debug.Log(gltfRoot.Scene);
+        // print(gltfRoot.Scene);
         // gltfRoot.Scene = ExportScene(fileName, _rootTransforms);
         var buffer = new GLTFBuffer();
 
@@ -399,7 +473,34 @@ public class Import : MonoBehaviour
             writer.WriteEndObject();
         }
 
-        Debug.Log(stringBuilder.ToString());
+        print(stringBuilder.ToString());
+    }
+
+    private void OnApplicationQuit() {
+        if(process != null)
+            process.Kill();
+    }
+
+    private Task<int> RunProcessAsync(string fileName, string arguments) {
+        var tcs = new TaskCompletionSource<int>();
+
+        process = new Process
+        {
+            StartInfo = { FileName = fileName, Arguments = arguments, WindowStyle = System.Diagnostics.ProcessWindowStyle.Hidden },
+            EnableRaisingEvents = true
+        };
+
+
+        process.Exited += (sender, args) =>
+        {
+            tcs.SetResult(process.ExitCode);
+            process.Dispose();
+            process = null;
+        };
+
+        process.Start();
+
+        return tcs.Task;
     }
     
    

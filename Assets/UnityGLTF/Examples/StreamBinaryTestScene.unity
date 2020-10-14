@@ -454,9 +454,9 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 1ba969e8540a6894cb522244d244466b, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  GLTFUri: IcoImg.gltf
+  GLTFUri: APART/APART.gltf
   path: D:\shado\Documents\GitHub\basis-exporter\Assets\StreamingAssets
-  fileName: Test
+  fileName: APART
   samplers: []
   textures: []
   images: []
