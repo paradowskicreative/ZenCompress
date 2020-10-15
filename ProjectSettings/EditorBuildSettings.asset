@@ -4,5 +4,8 @@
 EditorBuildSettings:
   m_ObjectHideFlags: 0
   serializedVersion: 2
-  m_Scenes: []
+  m_Scenes:
+  - enabled: 1
+    path: Assets/Scenes/Converter.unity
+    guid: 4cc934d499a11f843aaecc42bacfa019
   m_configObjects: {}

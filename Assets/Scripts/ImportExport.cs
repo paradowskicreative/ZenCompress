@@ -9,20 +9,29 @@ using System.Text;
 using System.IO;
 using System.Threading.Tasks;
 using Newtonsoft.Json;
-using Newtonsoft.Json.Linq;
+using System;
 using System.Threading;
 using System.Text.RegularExpressions;
 using System.Linq;
 using System.Diagnostics;
+using UnityEngine.UI;
+using TMPro;
 
 
 public class ImportExport : MonoBehaviour
 {
-    public string GLTFUri;
-    public GLTFRoot root;
+    // public string GLTFUri;
+    // public GLTFRoot root;
+    public TextMeshProUGUI loadedText;
+    public Button importButton;
+    public Button exportButton;
 
-    public string path;
-    public string fileName;
+    public string importFilePath;
+    public string exportFilePath;
+    public bool useExistingBasis = false;
+
+    // public string path;
+    // public string fileName;
 
     public List<string> samplers = new List<string>();
     public List<string> textures = new List<string>();
@@ -56,7 +65,7 @@ public class ImportExport : MonoBehaviour
     private BinaryWriter imageWriter;
     private Stream compiledStream;
     
-    public GLTFRoot gltfRoot = new GLTFRoot();
+    public GLTFRoot gltfRoot;
     public GLTFRoot glbRoot = new GLTFRoot();
     private GLTFBuffer buffer;
     private BufferId bufferId;
@@ -65,33 +74,106 @@ public class ImportExport : MonoBehaviour
 
     private Process process;
     
-    private async Task LoadGLTF(bool withPreview) {
-        var time = Time.time;
-        await LoadStream();
-        if(withPreview)
-            await LoadModel();
-        print("Loaded in " + (Time.time - time) + " seconds.");
+    public void SetImportPath(string path) {
+        importFilePath = path;
+        importButton.interactable = path != "" ? true : false;
+    }
+
+    public void SetExportPath(string path) {
+        exportFilePath = path;
+        exportButton.interactable = CanExport();
+    }
+
+    public async Task Import() { await LoadGLTF(false); }
+
+    public async Task Export() { await ExportGLB(); }
+
+    public async Task LoadGLTF(bool withPreview) {
+        try {
+            exportButton.interactable = false;
+            importButton.interactable = false;
+            var time = Time.time;
+            await LoadStream();
+            if(withPreview)
+                await LoadModel();
+            Logging.Log("Loaded in " + Mathf.RoundToInt((Time.time - time) * 100f) / 100f + " seconds.\n");
+            loadedText.text = "Loaded: " + Path.GetFileName(importFilePath);
+            importButton.interactable = CanImport();
+            exportButton.interactable = CanExport();
+        } catch(Exception err) {
+            Logging.Log(err.Message);
+        } finally {
+            importButton.interactable = CanImport();
+            exportButton.interactable = CanExport();
+        }
     }
 
     private async Task ExportGLB() {
-        var time = Time.time;
-        await ExportStream();
-        print("Exported in " + (Time.time - time) + " seconds.");
+        try {
+            exportButton.interactable = false;
+            importButton.interactable = false;
+            var time = Time.time;
+            await ExportStream();
+            Logging.Log("Exported in " + Mathf.RoundToInt((Time.time - time) * 100f) / 100f + " seconds.\n");
+            importButton.interactable = CanImport();
+            exportButton.interactable = CanExport();
+        } catch(Exception err) {
+            Logging.Log(err.ToString());
+        } finally {
+            importButton.interactable = CanImport();
+            exportButton.interactable = CanExport();
+        }
     }
+    
+    private bool CanExport() { return !string.IsNullOrEmpty(exportFilePath) && gltfRoot != null ? true : false; }
+
+    private bool CanImport() { return !string.IsNullOrEmpty(importFilePath) ? true : false; } // Reduncancy for future extensibility.
     
     private async Task LoadModel() {
         // TODO: Load the model
     } 
 
     private async Task LoadStream() {
-        GLTFUri = GLTFUri.TrimStart(new[] { Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar });
-        string fullPath;
-        fullPath = Path.Combine(Application.streamingAssetsPath, GLTFUri);
-        directoryPath = URIHelper.GetDirectoryName(fullPath);
-		gltfLoader = new FileLoader(directoryPath);
+        directoryPath = Path.GetDirectoryName(importFilePath);
+        var filename = Path.GetFileName(importFilePath);
+        gltfLoader = new FileLoader(directoryPath);
         compiledStream = new MemoryStream();
 
-        await LoadJson(fullPath);
+        await LoadJson(filename);
+        if(!gltfRoot.IsGLB) {
+            var binPath = Path.Combine(directoryPath, gltfRoot.Buffers[0].Uri);
+            binLoader = new FileLoader(binPath);
+            await LoadBin(binPath);
+        }
+
+        imgLoader = new FileLoader(directoryPath);
+    }
+
+    private async Task AddImage(GLTFImage image, BinaryWriter output, FileLoader loader, int bufferViewId, uint additionalLength) {
+        Logging.Log("Adding '" + image.Uri + "' to .glb...");
+        var loaderStream = await loader.LoadStreamAsync(image.Uri);
+        loaderStream.Position = 0;
+        uint offset = (uint)output.BaseStream.Position + additionalLength;
+        var length = GLTFSceneExporter.CalculateAlignment((uint)loaderStream.Length, 4);
+        GLTFSceneExporter.CopyStream(loaderStream, output);
+
+        var bufferImg = glbRoot.Images.First((img) => img.Uri == image.Uri);
+        bufferImg.Uri = null;
+        bufferImg.BufferView = new BufferViewId{
+            Id = bufferViewId,
+            Root = glbRoot
+        };
+
+        var bufferView = new BufferView {
+            Buffer = bufferId,
+            ByteLength = length,
+            ByteOffset = offset
+        };
+        
+        glbRoot.BufferViews.Add(bufferView);
+    }
+
+    private void PrepGLBRoot() {
         glbRoot = new GLTFRoot(gltfRoot);
         buffer = new GLTFBuffer();
         glbRoot.Buffers = new List<GLTFBuffer>();
@@ -120,42 +202,11 @@ public class ImportExport : MonoBehaviour
                 smplr.MinFilter = MinFilterMode.Nearest;
             }
         }
-        
-        if(!gltfRoot.IsGLB) {
-            var binPath = Path.Combine(directoryPath, gltfRoot.Buffers[0].Uri);
-            binLoader = new FileLoader(binPath);
-            await LoadBin(binPath);
-        }
-
-        imgLoader = new FileLoader(directoryPath);
-    }
-
-    private async Task AddImage(GLTFImage image, BinaryWriter output, FileLoader loader, int bufferViewId, uint additionalLength) {
-        print("Adding '" + image.Uri + "' to .glb...");
-        var loaderStream = await loader.LoadStreamAsync(image.Uri);
-        loaderStream.Position = 0;
-        uint offset = (uint)output.BaseStream.Position + additionalLength;
-        var length = GLTFSceneExporter.CalculateAlignment((uint)loaderStream.Length, 4);
-        GLTFSceneExporter.CopyStream(loaderStream, output);
-
-        var bufferImg = glbRoot.Images.First((img) => img.Uri == image.Uri);
-        bufferImg.Uri = null;
-        bufferImg.BufferView = new BufferViewId{
-            Id = bufferViewId,
-            Root = glbRoot
-        };
-
-        var bufferView = new BufferView {
-            Buffer = bufferId,
-            ByteLength = length,
-            ByteOffset = offset
-        };
-        
-        glbRoot.BufferViews.Add(bufferView);
     }
 
     private async Task ExportStream() {
-        var fullPath = Path.Combine(path, fileName) + ".glb";
+        PrepGLBRoot();
+        var fullPath = exportFilePath;//Path.Combine(exportFilePath, fileName) + ".glb";
 
         var jsonStream = new MemoryStream();
         var binStream = new MemoryStream();
@@ -230,7 +281,6 @@ public class ImportExport : MonoBehaviour
     private async Task LoadJson(string jsonFilePath)
     {
         loadedGltfStream = await gltfLoader.LoadStreamAsync(jsonFilePath);
-
         await loadedGltfStream.CopyToAsync(compiledStream);
 
         GLTFParser.ParseJson(compiledStream, out gltfRoot, 0);
@@ -244,32 +294,35 @@ public class ImportExport : MonoBehaviour
 
     private async Task Convert(CancellationToken token) {
 
-        foreach(var image in glbRoot.Images) {
-            token.ThrowIfCancellationRequested();
-            image.Uri = image.Uri.Replace("%20", " ");
-            print("Converting image '" + image.Uri + "' to BASIS...");
-            var ttc = Time.time;
-            var exe = Path.Combine(Application.streamingAssetsPath, "basisu.exe");//.Replace('/', '\\');
-            var uriSplit = image.Uri.Split(new char[] {'\\', '/'}).ToList();
-            var fileName = uriSplit[uriSplit.Count - 1];
-            var outputDir = Path.Combine(directoryPath, image.Uri.Substring(0, image.Uri.Length - fileName.Length));
-            var args = "-output_path " + outputDir + " -file " + "\"" + Path.Combine(directoryPath, image.Uri) + "\"";//.Replace('/', '\\');
-            await RunProcessAsync(exe, args);
-            var ext = image.MimeType.ToLower().Replace("image/", "");
-            image.MimeType = "image/basis";
-            Regex rgx = new Regex(@"\.(?:.(?!\.))+$");
-            image.Uri = image.Uri.Replace(rgx.Match(image.Uri).Value, ".basis");
-            ttc = Time.time - ttc;
-            print("Finished in " + ttc + " sec");
+        if(!useExistingBasis) {
+            foreach(var image in glbRoot.Images) {
+                token.ThrowIfCancellationRequested();
+                image.Uri = image.Uri.Replace("%20", " ");
+                Logging.Log("Converting image '" + image.Uri + "' to BASIS...");
+                var ttc = Time.time;
+                var exe = Path.Combine(Application.streamingAssetsPath, "basisu.exe");//.Replace('/', '\\');
+                var uriSplit = image.Uri.Split(new char[] {'\\', '/'}).ToList();
+                var fileName = uriSplit[uriSplit.Count - 1];
+                var outputDir = Path.Combine(directoryPath, image.Uri.Substring(0, image.Uri.Length - fileName.Length));
+                var args = "-output_path " + outputDir + " -file " + "\"" + Path.Combine(directoryPath, image.Uri) + "\"";//.Replace('/', '\\');
+                await RunProcessAsync(exe, args);
+                var ext = image.MimeType.ToLower().Replace("image/", "");
+                image.MimeType = "image/basis";
+                Regex rgx = new Regex(@"\.(?:.(?!\.))+$");
+                image.Uri = image.Uri.Replace(rgx.Match(image.Uri).Value, ".basis");
+                ttc = Time.time - ttc;
+                Logging.Log("Finished in " + Mathf.RoundToInt(ttc * 100f) / 100f + " seconds.\n");
+            }
         }
 
         foreach(var texture in glbRoot.Textures) {
-            var moz = new MozHubsTextureBasisExtension(texture.Source);
+            var moz = new MozHubsTextureBasisExtension(texture.Source ?? new ImageId());
 
             if(texture.Extensions == null)
                 texture.Extensions = new Dictionary<string, IExtension>();
 
-            texture.Extensions.Add(MozHubsTextureBasisExtensionFactory.EXTENSION_NAME, moz);
+            if(!texture.Extensions.ContainsKey(MozHubsTextureBasisExtensionFactory.EXTENSION_NAME))
+                texture.Extensions.Add(MozHubsTextureBasisExtensionFactory.EXTENSION_NAME, moz);
             texture.Source = null;
 
             if(texture.Sampler == null) {
@@ -315,10 +368,10 @@ public class ImportExport : MonoBehaviour
         int glbLength = (int)(GLTFHeaderSize + SectionHeaderSize +
             jsonStream.Length + SectionHeaderSize + binStream.Length);
 
-        string fullPath = Path.Combine(path, Path.ChangeExtension(fileName, "glb"));
+        // string fullPath = Path.Combine(path, Path.ChangeExtension(fileName, "glb"));
 
 
-        using (FileStream glbFile = new FileStream(fullPath, FileMode.Create))
+        using (FileStream glbFile = new FileStream(exportFilePath, FileMode.Create))
         {
 
             BinaryWriter writer = new BinaryWriter(glbFile);
@@ -435,7 +488,7 @@ public class ImportExport : MonoBehaviour
             writer.WriteEndObject();
         }
 
-        print(stringBuilder.ToString());
+        Logging.Log(stringBuilder.ToString());
     }
 
     private void OnApplicationQuit() {
