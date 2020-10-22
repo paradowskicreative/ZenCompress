@@ -37,6 +37,9 @@ public class ImportExport : MonoBehaviour
     public bool useMultithreading = false;
     public int quality = 128;
 
+    public GLTFComponent gLTFComponent;
+    public MouseOrbitImproved moi;
+
     private int queueIndex;
     private int numberOfOperations = 1;
     private int completedOperations = 0;
@@ -71,10 +74,10 @@ public class ImportExport : MonoBehaviour
     private Stream loadedGltfStream;
     private FileLoader binLoader;
     private Stream loadedBinStream;
+    private MemoryStream savedBinStream;
     private FileLoader imgLoader;
     private Stream loadedImgStream;
     private BinaryWriter imageWriter;
-    private Stream compiledStream;
     
     public GLTFRoot gltfRoot;
     public GLTFRoot glbRoot = new GLTFRoot();
@@ -82,11 +85,6 @@ public class ImportExport : MonoBehaviour
     private BufferId bufferId;
     protected GLBStream gltfStream;
     private string directoryPath;
-
-    // struct TaskData {
-    //     public string name;
-    //     public float startTime;
-    // }
 
     struct TaskData {
         public string name;
@@ -108,20 +106,46 @@ public class ImportExport : MonoBehaviour
         exportButton.interactable = CanExport();
     }
 
-    public async Task Import() { await LoadGLTF(false); }
+    public async Task Import() { await LoadGLTF(); }
 
     public async Task Export() { await ExportGLB(); }
 
-    public async Task LoadGLTF(bool withPreview) {
+    public async Task LoadGLTF() {
         try {
             exportButton.interactable = false;
             importButton.interactable = false;
             var time = Time.time;
             await LoadStream();
-            if(withPreview)
+            var children = moi.target.GetComponentsInChildren<Transform>();
+            foreach(var child in children) {
+                if(child.gameObject.GetInstanceID() != moi.target.gameObject.GetInstanceID())
+                    Destroy(child.gameObject);
+            }
+            if(showPreview) {
+                Logging.Log("Loading preview...");
                 await LoadModel();
+                children = moi.target.GetComponentsInChildren<Transform>();
+                var colliders = new List<BoxCollider>();
+                Bounds bounds = new Bounds();
+                foreach(var child in children) {
+                    BoxCollider boxCollider;
+                    if(child.gameObject.TryGetComponent<BoxCollider>(out boxCollider))
+                        bounds.Encapsulate(boxCollider.bounds);
+                }
+
+                if(Camera.main.aspect >= 1f)
+                    moi.distance = bounds.extents.magnitude * 1.5f / Mathf.Tan(Camera.main.fieldOfView * 0.5f * Mathf.Deg2Rad);
+                else
+                    moi.distance = (bounds.extents.magnitude / Camera.main.aspect) * 1.5f / Mathf.Tan(Camera.main.fieldOfView * 0.5f * Mathf.Deg2Rad);
+
+
+
+            }
             Logging.Log("Loaded in " + Mathf.RoundToInt((Time.time - time) * 100f) / 100f + " seconds.\n");
             loadedText.text = "Loaded: " + Path.GetFileName(importFilePath);
+            gltfLoader.CloseStream();
+            binLoader.CloseStream();
+            imgLoader.CloseStream();
             importButton.interactable = CanImport();
             exportButton.interactable = CanExport();
         } catch(Exception err) {
@@ -156,14 +180,15 @@ public class ImportExport : MonoBehaviour
     private bool CanImport() { return !string.IsNullOrEmpty(importFilePath) ? true : false; } // Reduncancy for future extensibility.
     
     private async Task LoadModel() {
-        // TODO: Load the model
+        gLTFComponent.GLTFUri = importFilePath;
+        await gLTFComponent.Load();
+        Logging.Log("Done loading glTF preview!");
     } 
 
     private async Task LoadStream() {
         directoryPath = Path.GetDirectoryName(importFilePath);
         var filename = Path.GetFileName(importFilePath);
         gltfLoader = new FileLoader(directoryPath);
-        compiledStream = new MemoryStream();
 
         await LoadJson(filename);
         if(!gltfRoot.IsGLB) {
@@ -244,8 +269,8 @@ public class ImportExport : MonoBehaviour
         var imgWriter = new BinaryWriter(imgStream);
         var jsonWriter = new StreamWriter(jsonStream, Encoding.ASCII) as TextWriter;
         
-        loadedBinStream.Position = 0;
-        GLTFSceneExporter.CopyStream(loadedBinStream, bufferWriter);
+        savedBinStream.Position = 0;
+        GLTFSceneExporter.CopyStream(savedBinStream, bufferWriter);
 
         foreach(var image in glbRoot.Images) {
             if(image.MimeType == null || image.MimeType == "") {
@@ -309,21 +334,22 @@ public class ImportExport : MonoBehaviour
             writer.Flush();
         }
 
+        exportedText.text = "Exported: " + Path.GetFileName(fullPath);
+
         completedOperations += 1;
     }
 
     private async Task LoadJson(string jsonFilePath)
     {
         loadedGltfStream = await gltfLoader.LoadStreamAsync(jsonFilePath);
-        await loadedGltfStream.CopyToAsync(compiledStream);
 
-        GLTFParser.ParseJson(compiledStream, out gltfRoot, 0);
+        GLTFParser.ParseJson(loadedGltfStream, out gltfRoot, 0);
     }
 
     private async Task LoadBin(string binFilePath) {
         loadedBinStream = await binLoader.LoadStreamAsync(binFilePath);
-
-        await loadedBinStream.CopyToAsync(compiledStream);
+        savedBinStream = new MemoryStream();
+        await loadedBinStream.CopyToAsync(savedBinStream);
     }
 
     private void FixedUpdate() {

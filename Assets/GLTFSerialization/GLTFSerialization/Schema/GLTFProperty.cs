@@ -12,7 +12,8 @@ namespace GLTF.Schema
 		{
 			{ ExtTextureTransformExtensionFactory.EXTENSION_NAME, new ExtTextureTransformExtensionFactory() },
 			{ KHR_materials_pbrSpecularGlossinessExtensionFactory.EXTENSION_NAME, new KHR_materials_pbrSpecularGlossinessExtensionFactory() },
-      { MSFT_LODExtensionFactory.EXTENSION_NAME, new MSFT_LODExtensionFactory() }
+      { MSFT_LODExtensionFactory.EXTENSION_NAME, new MSFT_LODExtensionFactory() },
+	  { MOZ_lightmapExtensionFactory.EXTENSION_NAME, new MOZ_lightmapExtensionFactory() }
 		};
 		private static DefaultExtensionFactory _defaultExtensionFactory = new DefaultExtensionFactory();
 
@@ -159,6 +160,7 @@ namespace GLTF.Schema
 			}
 
 			JObject extensions = (JObject)JToken.ReadFrom(reader);
+			
 			var extensionsCollection = new Dictionary<string, IExtension>();
 
 			foreach (JToken child in extensions.Children())

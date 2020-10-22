@@ -52,6 +52,9 @@ half		_UVSec;
 half4	   _EmissionColor;
 sampler2D   _EmissionMap;
 
+sampler2D _Lightmap;
+float4 _Lightmap_ST;
+
 //-------------------------------------------------------------------------------------
 // Input functions
 
@@ -78,7 +81,8 @@ float4 TexCoords(VertexInput v)
 {
 	float4 texcoord;
 	texcoord.xy = TRANSFORM_TEX(v.uv0, _MainTex); // Always source from uv0
-	texcoord.zw = TRANSFORM_TEX(((_UVSec == 0) ? v.uv0 : v.uv1), _DetailAlbedoMap);
+	texcoord.zw = TRANSFORM_TEX(v.uv1, _Lightmap);
+	// texcoord.zw = TRANSFORM_TEX(((_UVSec == 0) ? v.uv0 : v.uv1), _DetailAlbedoMap);
 	return texcoord;
 }
 
@@ -93,7 +97,7 @@ half3 Albedo(float4 texcoords, half4 color)
 half3 Albedo(float4 texcoords)
 #endif
 {
-	half3 albedo = _Color.rgb * tex2D(_MainTex, texcoords.xy).rgb;
+	half3 albedo = _Color.rgb * tex2D(_MainTex, texcoords.xy).rgb * tex2D(_Lightmap, texcoords.zw).rgb;
 
 #if _DETAIL
 	#if (SHADER_TARGET < 30)

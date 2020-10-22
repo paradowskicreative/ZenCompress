@@ -33,7 +33,6 @@ public class Options : MonoBehaviour
             qualityInput.text = q.ToString();
             io.quality = q;
         } catch (Exception e) {
-            // Logging.Log(quality + " is not a valid value!");
         }
     }
 }

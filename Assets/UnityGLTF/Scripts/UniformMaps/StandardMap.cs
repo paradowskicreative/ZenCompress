@@ -271,6 +271,29 @@ namespace UnityGLTF
 			}
 		}
 
+		public virtual Texture LightmapTexture
+		{
+			get { return _material.HasProperty("_EmissionMap") ? _material.GetTexture("_Lightmap") : null; }
+			set
+			{
+				if (_material.HasProperty("_Lightmap"))
+				{
+					_material.SetTexture("_Lightmap", value);
+				}
+				else
+				{
+					Debug.LogWarning("Tried to set an emission map to a material that does not support it.");
+				}
+			}
+		}
+
+		// not implemented by the Standard shader
+		public virtual int LightmapTexCoord
+		{
+			get { return 0; }
+			set { return; }
+		}
+
 		public virtual AlphaMode AlphaMode
 		{
 			get { return _alphaMode; }

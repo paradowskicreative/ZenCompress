@@ -34,6 +34,9 @@ namespace UnityGLTF
 		Vector2 EmissiveXScale { get; set; }
 		int EmissiveXTexCoord { get; set; }
 
+		Texture LightmapTexture { get; set; }
+		int LightmapTexCoord { get; set; }
+
 		GLTF.Schema.AlphaMode AlphaMode { get; set; }
 		double AlphaCutoff { get; set; }
 		bool DoubleSided { get; set; }

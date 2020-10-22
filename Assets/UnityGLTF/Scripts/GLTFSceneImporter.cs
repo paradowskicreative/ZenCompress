@@ -509,6 +509,8 @@ namespace UnityGLTF
 			{
 				GLTFImage image = _gltfRoot.Images[sourceId];
 
+				image.Uri = image.Uri.Replace("%20", " ");
+
 				// we only load the streams if not a base64 uri, meaning the data is in the uri
 				if (image.Uri != null && !URIHelper.IsBase64Uri(image.Uri))
 				{
@@ -1800,7 +1802,7 @@ namespace UnityGLTF
 			const string specGlossExtName = KHR_materials_pbrSpecularGlossinessExtensionFactory.EXTENSION_NAME;
 			if (def.Extensions != null && def.Extensions.ContainsKey(specGlossExtName))
 			{
-				var specGlossDef = (KHR_materials_pbrSpecularGlossinessExtension)def.Extensions[specGlossExtName];
+				var specGlossDef = def.Extensions[specGlossExtName] as KHR_materials_pbrSpecularGlossinessExtension;
 				if (specGlossDef.DiffuseTexture != null)
 				{
 					var textureId = specGlossDef.DiffuseTexture.Index;
@@ -1812,6 +1814,14 @@ namespace UnityGLTF
 					var textureId = specGlossDef.SpecularGlossinessTexture.Index;
 					tasks.Add(ConstructImageBuffer(textureId.Value, textureId.Id));
 				}
+			}
+
+			const string mozLightmapExtName = MOZ_lightmapExtensionFactory.EXTENSION_NAME;
+			if (def.Extensions != null && def.Extensions.ContainsKey(MOZ_lightmapExtensionFactory.EXTENSION_NAME))
+			{
+				var mozDef = def.Extensions[mozLightmapExtName] as MOZ_lightmapExtension;
+				if(mozDef.LightmapInfo != null)
+					tasks.Add(ConstructImageBuffer(mozDef.LightmapInfo.Index.Value, mozDef.LightmapInfo.Index.Id));
 			}
 
 			return Task.WhenAll(tasks);
@@ -1920,6 +1930,16 @@ namespace UnityGLTF
 					mapper = new MetalRoughMap(MaximumLod);
 				}
 			}
+			var mozLightmapExtName = MOZ_lightmapExtensionFactory.EXTENSION_NAME;
+			if(_gltfRoot.ExtensionsUsed != null && _gltfRoot.ExtensionsUsed.Contains(mozLightmapExtName)
+				&& def.Extensions != null && def.Extensions.ContainsKey(mozLightmapExtName)) {
+					var lightmap = (MOZ_lightmapExtension)def.Extensions[mozLightmapExtName];
+					TextureId textureId = lightmap.LightmapInfo.Index;
+					await ConstructTexture(textureId.Value, textureId.Id, !KeepCPUCopyOfTexture, false);
+					mapper.LightmapTexture = _assetCache.TextureCache[textureId.Id].Texture;
+					mapper.LightmapTexCoord = lightmap.LightmapInfo.TexCoord;
+			}
+				
 
 			mapper.Material.name = def.Name;
 			mapper.AlphaMode = def.AlphaMode;

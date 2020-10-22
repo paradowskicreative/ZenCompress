@@ -90,7 +90,7 @@ Shader "GLTF/PbrSpecularGlossiness"
 
 			#pragma vertex vertBase
 			#pragma fragment fragBase
-			#include "UnityStandardInput.cginc"
+			#include "UnityStandardInputModified.cginc"
 			#include "UnityStandardCoreForward.cginc"
 
 			ENDCG
@@ -125,7 +125,7 @@ Shader "GLTF/PbrSpecularGlossiness"
 
 			#pragma vertex vertAdd
 			#pragma fragment fragAdd
-			#include "UnityStandardInput.cginc"
+			#include "UnityStandardInputModified.cginc"
 			#include "UnityStandardCoreForward.cginc"
 
 			ENDCG
@@ -254,7 +254,7 @@ Shader "GLTF/PbrSpecularGlossiness"
 
 			#pragma vertex vertBase
 			#pragma fragment fragBase
-			#include "UnityStandardInput.cginc"
+			#include "UnityStandardInputModified.cginc"
 			#include "UnityStandardCoreForward.cginc"
 
 			ENDCG
@@ -288,7 +288,7 @@ Shader "GLTF/PbrSpecularGlossiness"
 			
 			#pragma vertex vertAdd
 			#pragma fragment fragAdd
-			#include "UnityStandardInput.cginc"
+			#include "UnityStandardInputModified.cginc"
 			#include "UnityStandardCoreForward.cginc"
 
 			ENDCG
@@ -343,5 +343,5 @@ Shader "GLTF/PbrSpecularGlossiness"
 	}
 
 	FallBack "VertexLit"
-	CustomEditor "PbrShaderGUI"
+	// CustomEditor "PbrShaderGUI"
 }

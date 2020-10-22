@@ -61,7 +61,6 @@
     ],
     "materials" : [
         {
-            "alphaMode" : "BLEND",
             "emissiveFactor" : [
                 0,
                 0,

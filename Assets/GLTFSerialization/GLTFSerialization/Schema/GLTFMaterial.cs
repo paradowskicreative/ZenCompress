@@ -40,6 +40,8 @@ namespace GLTF.Schema
 		/// </summary>
 		public TextureInfo EmissiveTexture;
 
+		public TextureInfo LightmapTexture;
+
 		/// <summary>
 		/// The RGB components of the emissive color of the material.
 		/// If an emissiveTexture is specified, this value is multiplied with the texel
@@ -110,6 +112,11 @@ namespace GLTF.Schema
 			if (material.EmissiveTexture != null)
 			{
 				EmissiveTexture = new TextureInfo(material.EmissiveTexture, gltfRoot);
+			}
+
+			if(material.LightmapTexture != null)
+			{
+				LightmapTexture = new TextureInfo(material.LightmapTexture, gltfRoot);
 			}
 
 			EmissiveFactor = material.EmissiveFactor;

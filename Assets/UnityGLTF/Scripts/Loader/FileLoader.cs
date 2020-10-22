@@ -7,6 +7,7 @@ namespace UnityGLTF.Loader
 	public class FileLoader : IDataLoader, IDataLoader2
 	{
 		private readonly string _rootDirectoryPath;
+		private FileStream thisStream;
 
 		public FileLoader(string rootDirectoryPath)
 		{
@@ -30,8 +31,13 @@ namespace UnityGLTF.Loader
 			{
 				throw new FileNotFoundException("Buffer file not found", relativeFilePath);
 			}
+			thisStream = File.OpenRead(pathToLoad);
+			return thisStream;
+		}
 
-			return File.OpenRead(pathToLoad);
+		public void CloseStream() {
+			if(thisStream != null)
+				thisStream.Close();
 		}
 	}
 }

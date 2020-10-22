@@ -23,13 +23,15 @@ Shader "GLTF/PbrMetallicRoughness"
 		_EmissionColor("Emissive Factor", Color) = (0,0,0)
 		_EmissionMap("Emissive Texture", 2D) = "white" {}
 
+		_Lightmap("Lightmap", 2D) = "white" {}
+
 		_Cull("Cull", Int) = 0
 
 		// Blending state
-		[HideInInspector] _Mode ("__mode", Float) = 0.0
-		[HideInInspector] _SrcBlend ("__src", Float) = 1.0
-		[HideInInspector] _DstBlend ("__dst", Float) = 0.0
-		[HideInInspector] _ZWrite ("__zw", Float) = 1.0
+		 _Mode ("__mode", Float) = 0.0
+		 _SrcBlend ("__src", Float) = 1.0
+		 _DstBlend ("__dst", Float) = 0.0
+		 _ZWrite ("__zw", Float) = 1.0
 	}
 
 	CGINCLUDE
@@ -74,7 +76,7 @@ Shader "GLTF/PbrMetallicRoughness"
 
 			#pragma vertex vertBase
 			#pragma fragment fragBase
-			#include "UnityStandardInput.cginc"
+			#include "UnityStandardInputModified.cginc"
 			#include "UnityStandardCoreForward.cginc"
 
 			ENDCG
@@ -109,7 +111,7 @@ Shader "GLTF/PbrMetallicRoughness"
 
 			#pragma vertex vertAdd
 			#pragma fragment fragAdd
-			#include "UnityStandardInput.cginc"
+			#include "UnityStandardInputModified.cginc"
 			#include "UnityStandardCoreForward.cginc"
 
 			ENDCG
@@ -186,6 +188,8 @@ Shader "GLTF/PbrMetallicRoughness"
 			Cull [_Cull]
 
 			CGPROGRAM
+			#include "UnityStandardMeta.cginc"
+			
 			#pragma vertex vert_meta
 			#pragma fragment frag_meta
 
@@ -195,7 +199,7 @@ Shader "GLTF/PbrMetallicRoughness"
 			#pragma shader_feature ___ _DETAIL_MULX2
 			#pragma shader_feature EDITOR_VISUALIZATION
 
-			#include "UnityStandardMeta.cginc"
+			
 			ENDCG
 		}
 	}
@@ -235,7 +239,7 @@ Shader "GLTF/PbrMetallicRoughness"
 
 			#pragma vertex vertBase
 			#pragma fragment fragBase
-			#include "UnityStandardInput.cginc"
+			#include "UnityStandardInputModified.cginc"
 			#include "UnityStandardCoreForward.cginc"
 
 			ENDCG
@@ -268,7 +272,7 @@ Shader "GLTF/PbrMetallicRoughness"
 			
 			#pragma vertex vertAdd
 			#pragma fragment fragAdd
-			#include "UnityStandardInput.cginc"
+			#include "UnityStandardInputModified.cginc"
 			#include "UnityStandardCoreForward.cginc"
 
 			ENDCG
@@ -308,6 +312,8 @@ Shader "GLTF/PbrMetallicRoughness"
 			Cull [_Cull]
 
 			CGPROGRAM
+			#include "UnityStandardMeta.cginc"
+
 			#pragma vertex vert_meta
 			#pragma fragment frag_meta
 
@@ -317,12 +323,12 @@ Shader "GLTF/PbrMetallicRoughness"
 			#pragma shader_feature ___ _DETAIL_MULX2
 			#pragma shader_feature EDITOR_VISUALIZATION
 
-			#include "UnityStandardMeta.cginc"
+			
 			ENDCG
 		}
 	}
 
 
 	FallBack "VertexLit"
-	CustomEditor "PbrShaderGUI"
+	// CustomEditor "PbrShaderGUI"
 }
