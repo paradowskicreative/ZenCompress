@@ -16,19 +16,30 @@ using System.Linq;
 using System.Diagnostics;
 using UnityEngine.UI;
 using TMPro;
-
+// using 
 
 public class ImportExport : MonoBehaviour
 {
+    public event EventHandler<TaskCompleteArgs> TaskComplete;
+
     // public string GLTFUri;
     // public GLTFRoot root;
     public TextMeshProUGUI loadedText;
+    public TextMeshProUGUI exportedText;
     public Button importButton;
     public Button exportButton;
+    public Image progress;
 
     public string importFilePath;
     public string exportFilePath;
     public bool useExistingBasis = false;
+    public bool showPreview = true;
+    public bool useMultithreading = false;
+    public int quality = 128;
+
+    private int queueIndex;
+    private int numberOfOperations = 1;
+    private int completedOperations = 0;
 
     // public string path;
     // public string fileName;
@@ -72,7 +83,20 @@ public class ImportExport : MonoBehaviour
     protected GLBStream gltfStream;
     private string directoryPath;
 
-    private Process process;
+    // struct TaskData {
+    //     public string name;
+    //     public float startTime;
+    // }
+
+    struct TaskData {
+        public string name;
+        public float startTime;
+        public string msg;
+    }
+
+    private List<TaskData> msgQueue = new List<TaskData>();
+
+    private List<Process> processes = new List<Process>();
     
     public void SetImportPath(string path) {
         importFilePath = path;
@@ -113,12 +137,14 @@ public class ImportExport : MonoBehaviour
             exportButton.interactable = false;
             importButton.interactable = false;
             var time = Time.time;
+            completedOperations = 0;
             await ExportStream();
             Logging.Log("Exported in " + Mathf.RoundToInt((Time.time - time) * 100f) / 100f + " seconds.\n");
             importButton.interactable = CanImport();
             exportButton.interactable = CanExport();
         } catch(Exception err) {
             Logging.Log(err.ToString());
+            UnityEngine.Debug.LogException(err);
         } finally {
             importButton.interactable = CanImport();
             exportButton.interactable = CanExport();
@@ -206,6 +232,8 @@ public class ImportExport : MonoBehaviour
 
     private async Task ExportStream() {
         PrepGLBRoot();
+        numberOfOperations = 1 + (glbRoot.Images != null ? glbRoot.Images.Count : 0) * 6 + 1;
+        completedOperations = 0;
         var fullPath = exportFilePath;//Path.Combine(exportFilePath, fileName) + ".glb";
 
         var jsonStream = new MemoryStream();
@@ -215,15 +243,18 @@ public class ImportExport : MonoBehaviour
         var bufferWriter = new BinaryWriter(binStream);
         var imgWriter = new BinaryWriter(imgStream);
         var jsonWriter = new StreamWriter(jsonStream, Encoding.ASCII) as TextWriter;
-
+        
         loadedBinStream.Position = 0;
         GLTFSceneExporter.CopyStream(loadedBinStream, bufferWriter);
+
         foreach(var image in glbRoot.Images) {
             if(image.MimeType == null || image.MimeType == "") {
                 var ext = image.Uri.Split('.');
                 image.MimeType = "image/" + ext[ext.Length - 1].ToLower();
             }
         }
+
+        completedOperations += 1;
 
         await Convert(ThreadingUtility.QuitToken);
 
@@ -234,6 +265,7 @@ public class ImportExport : MonoBehaviour
             foreach(var image in glbRoot.Images) {
                 currentBufferView++;
                 await AddImage(image, imageWriter, imgLoader, currentBufferView, preImgByteLength);
+                completedOperations += 1;
             }
         }
         
@@ -276,6 +308,8 @@ public class ImportExport : MonoBehaviour
 
             writer.Flush();
         }
+
+        completedOperations += 1;
     }
 
     private async Task LoadJson(string jsonFilePath)
@@ -292,27 +326,71 @@ public class ImportExport : MonoBehaviour
         await loadedBinStream.CopyToAsync(compiledStream);
     }
 
+    private void FixedUpdate() {
+        progress.fillAmount = (1f/numberOfOperations) * completedOperations;
+        if (msgQueue.Count == 0 || queueIndex == msgQueue.Count) return;
+
+        // Logging.Log(msgQueue.Count + " | " + queueIndex);
+        for (; queueIndex < msgQueue.Count; queueIndex++) {
+            TaskData msg = msgQueue[queueIndex];
+            if(string.IsNullOrEmpty(msg.msg))
+                Logging.Log("Finished " + msg.name + " in " + Mathf.RoundToInt((Time.time - msg.startTime) * 100f) / 100f + " seconds.");
+            else
+                Logging.Log(msg.msg);
+        }
+    }
+
     private async Task Convert(CancellationToken token) {
 
         if(!useExistingBasis) {
+            var tasks = new List<Task>();
+            SemaphoreSlim maxThread = new SemaphoreSlim(4);
+            // var taskLists = new List<List<Task>>();
+                        
             foreach(var image in glbRoot.Images) {
                 token.ThrowIfCancellationRequested();
                 image.Uri = image.Uri.Replace("%20", " ");
-                Logging.Log("Converting image '" + image.Uri + "' to BASIS...");
-                var ttc = Time.time;
+                
                 var exe = Path.Combine(Application.streamingAssetsPath, "basisu.exe");//.Replace('/', '\\');
                 var uriSplit = image.Uri.Split(new char[] {'\\', '/'}).ToList();
                 var fileName = uriSplit[uriSplit.Count - 1];
                 var outputDir = Path.Combine(directoryPath, image.Uri.Substring(0, image.Uri.Length - fileName.Length));
-                var args = "-output_path " + outputDir + " -file " + "\"" + Path.Combine(directoryPath, image.Uri) + "\"";//.Replace('/', '\\');
-                await RunProcessAsync(exe, args);
+                var args = "-q " + quality.ToString() + " -comp_level 2 -output_path " + outputDir + " -file \"" + Path.Combine(directoryPath, image.Uri) + "\"";//.Replace('/', '\\');
+                var ttc = Time.time;
+
+                if(useMultithreading) {
+                    await maxThread.WaitAsync();
+
+                    tasks.Add(Task.Factory.StartNew(async () => {
+                        try {
+                            msgQueue.Add(new TaskData { msg = "Converting image '" + image.Uri + "' to BASIS..." });
+                            await RunProcessAsync(exe, args);
+                            completedOperations += 5;
+                            msgQueue.Add(new TaskData { startTime = ttc, name = fileName });
+                        } finally {
+                            maxThread.Release();
+                        }
+                    }).Unwrap());
+
+                } else {
+                    Logging.Log("Converting image '" + image.Uri + "' to BASIS...");
+                    await RunProcessAsync(exe, args);
+                    ttc = Time.time - ttc;
+                    completedOperations += 5;
+                    Logging.Log("Finished in " + Mathf.RoundToInt(ttc * 100f) / 100f + " seconds.\n");
+                }
+                
                 var ext = image.MimeType.ToLower().Replace("image/", "");
                 image.MimeType = "image/basis";
                 Regex rgx = new Regex(@"\.(?:.(?!\.))+$");
                 image.Uri = image.Uri.Replace(rgx.Match(image.Uri).Value, ".basis");
-                ttc = Time.time - ttc;
-                Logging.Log("Finished in " + Mathf.RoundToInt(ttc * 100f) / 100f + " seconds.\n");
+                
             }
+
+            await Task.WhenAll(tasks.ToArray());
+            
+            msgQueue = new List<TaskData>();
+            queueIndex = 0;             
         }
 
         foreach(var texture in glbRoot.Textures) {
@@ -343,6 +421,10 @@ public class ImportExport : MonoBehaviour
         if(!glbRoot.ExtensionsRequired.Contains(MozHubsTextureBasisExtensionFactory.EXTENSION_NAME))
             glbRoot.ExtensionsRequired.Add(MozHubsTextureBasisExtensionFactory.EXTENSION_NAME);
         
+    }
+
+    private async Task CompleteTasks(Task[] tasks) {
+        await Task.WhenAll(tasks);
     }
 
     private void ExportJson() {
@@ -492,24 +574,33 @@ public class ImportExport : MonoBehaviour
     }
 
     private void OnApplicationQuit() {
-        if(process != null)
-            process.Kill();
+        foreach(var process in processes) {
+            if(process != null) {
+                try { process.Kill(); } catch {}
+            }
+        }
     }
 
     private Task<int> RunProcessAsync(string fileName, string arguments) {
+        
         var tcs = new TaskCompletionSource<int>();
 
-        process = new Process
+        var process = new Process
         {
             StartInfo = { FileName = fileName, Arguments = arguments, WindowStyle = System.Diagnostics.ProcessWindowStyle.Hidden },
             EnableRaisingEvents = true
         };
+
+        try {
+            processes.Add(process);
+        } catch {}
 
 
         process.Exited += (sender, args) =>
         {
             tcs.SetResult(process.ExitCode);
             process.Dispose();
+            processes.Remove(process);
             process = null;
         };
 
@@ -518,7 +609,14 @@ public class ImportExport : MonoBehaviour
         return tcs.Task;
     }
     
-   
+    private void TaskCompleted(object sender, TaskCompleteArgs e) {
+        Logging.Log("Finished " + e.msg + " in " + Mathf.RoundToInt((Time.time - e.startTime) * 100f) / 100f + " seconds.\n");
+    }
+}
+
+public class TaskCompleteArgs :EventArgs {
+    public string msg;
+    public float startTime;
 }
 
 public static class Extensions {
