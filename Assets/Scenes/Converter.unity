@@ -2785,7 +2785,7 @@ MonoBehaviour:
   GLTFUri: 
   Multithreaded: 1
   UseStream: 1
-  AppendStreamingAssets: 1
+  AppendStreamingAssets: 0
   PlayAnimationOnLoad: 1
   Factory: {fileID: 0}
   loadOnStart: 0
@@ -3833,6 +3833,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   io: {fileID: 136979730}
+  button: {fileID: 1291072640}
 --- !u!1 &1369672563
 GameObject:
   m_ObjectHideFlags: 0
@@ -5153,6 +5154,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   io: {fileID: 136979730}
+  button: {fileID: 1764974249}
 --- !u!1 &1778440462
 GameObject:
   m_ObjectHideFlags: 0

@@ -90,7 +90,7 @@ namespace UnityGLTF
 					{
 						fullPath = GLTFUri;
 					}
-					string directoryPath = URIHelper.GetDirectoryName(fullPath);
+					string directoryPath = Path.GetDirectoryName(fullPath);
 					importOptions.DataLoader = new FileLoader(directoryPath);
 					sceneImporter = Factory.CreateSceneImporter(
 						Path.GetFileName(GLTFUri),

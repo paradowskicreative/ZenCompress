@@ -86,12 +86,14 @@ public class ImportExport : MonoBehaviour
     protected GLBStream gltfStream;
     private string directoryPath;
 
+    private Stopwatch timeToCompletion = new Stopwatch();
+
     struct TaskData {
         public string name;
-        public float startTime;
+        public float time;
         public string msg;
     }
-
+   
     private List<TaskData> msgQueue = new List<TaskData>();
 
     private List<Process> processes = new List<Process>();
@@ -114,7 +116,9 @@ public class ImportExport : MonoBehaviour
         try {
             exportButton.interactable = false;
             importButton.interactable = false;
-            var time = Time.time;
+            // timeToCompletion = new Stopwatch();
+            // timeToCompletion.Start();
+            var now = DateTime.Now;
             await LoadStream();
             var children = moi.target.GetComponentsInChildren<Transform>();
             foreach(var child in children) {
@@ -141,7 +145,9 @@ public class ImportExport : MonoBehaviour
 
 
             }
-            Logging.Log("Loaded in " + Mathf.RoundToInt((Time.time - time) * 100f) / 100f + " seconds.\n");
+            // timeToCompletion.Stop();
+            var ttc = DateTime.Now.Subtract(now).TotalSeconds;
+            Logging.Log("Loaded in " + Mathf.RoundToInt((float)ttc * 100f) / 100f + " seconds.\n");
             loadedText.text = "Loaded: " + Path.GetFileName(importFilePath);
             gltfLoader.CloseStream();
             binLoader.CloseStream();
@@ -150,6 +156,7 @@ public class ImportExport : MonoBehaviour
             exportButton.interactable = CanExport();
         } catch(Exception err) {
             Logging.Log(err.Message);
+            UnityEngine.Debug.LogException(err);
         } finally {
             importButton.interactable = CanImport();
             exportButton.interactable = CanExport();
@@ -160,10 +167,13 @@ public class ImportExport : MonoBehaviour
         try {
             exportButton.interactable = false;
             importButton.interactable = false;
-            var time = Time.time;
+            // timeToCompletion = new Stopwatch();
+            // timeToCompletion.Start();
+            var now = DateTime.Now;
             completedOperations = 0;
             await ExportStream();
-            Logging.Log("Exported in " + Mathf.RoundToInt((Time.time - time) * 100f) / 100f + " seconds.\n");
+            var ttc = DateTime.Now.Subtract(now).TotalSeconds;
+            Logging.Log("Exported in " + Mathf.RoundToInt((float)ttc * 100f) / 100f + " seconds.\n");
             importButton.interactable = CanImport();
             exportButton.interactable = CanExport();
         } catch(Exception err) {
@@ -356,11 +366,10 @@ public class ImportExport : MonoBehaviour
         progress.fillAmount = (1f/numberOfOperations) * completedOperations;
         if (msgQueue.Count == 0 || queueIndex == msgQueue.Count) return;
 
-        // Logging.Log(msgQueue.Count + " | " + queueIndex);
         for (; queueIndex < msgQueue.Count; queueIndex++) {
             TaskData msg = msgQueue[queueIndex];
             if(string.IsNullOrEmpty(msg.msg))
-                Logging.Log("Finished " + msg.name + " in " + Mathf.RoundToInt((Time.time - msg.startTime) * 100f) / 100f + " seconds.");
+                Logging.Log("Finished " + msg.name + " in " + msg.time + " seconds.");
             else
                 Logging.Log(msg.msg);
         }
@@ -377,12 +386,24 @@ public class ImportExport : MonoBehaviour
                 token.ThrowIfCancellationRequested();
                 image.Uri = image.Uri.Replace("%20", " ");
                 
-                var exe = Path.Combine(Application.streamingAssetsPath, "basisu.exe");//.Replace('/', '\\');
+                #if UNITY_EDITOR_OSX || UNITY_STANDALONE_OSX
+                var exe = "/bin/bash";
+                #else
+                var exe = Path.Combine(Application.streamingAssetsPath, "basisu.exe");
+                #endif
                 var uriSplit = image.Uri.Split(new char[] {'\\', '/'}).ToList();
                 var fileName = uriSplit[uriSplit.Count - 1];
                 var outputDir = Path.Combine(directoryPath, image.Uri.Substring(0, image.Uri.Length - fileName.Length));
-                var args = "-q " + quality.ToString() + " -comp_level 2 -output_path " + outputDir + " -file \"" + Path.Combine(directoryPath, image.Uri) + "\"";//.Replace('/', '\\');
-                var ttc = Time.time;
+                
+                #if UNITY_EDITOR_OSX || UNITY_STANDALONE_OSX
+                var args = "-c './basisu -q " + quality.ToString() + " -comp_level 2 -output_path \"" + outputDir + "\" -file \"" + Path.Combine(directoryPath, image.Uri) + "\"'";
+                #else
+                var args = "-q " + quality.ToString() + " -comp_level 2 -output_path \"" + outputDir + "\" -file " + Path.Combine(directoryPath, image.Uri) + "\"";
+                #endif
+
+                // var taskTime = new Stopwatch();
+                // taskTime.Start();
+                var now = DateTime.Now;
 
                 if(useMultithreading) {
                     await maxThread.WaitAsync();
@@ -391,8 +412,10 @@ public class ImportExport : MonoBehaviour
                         try {
                             msgQueue.Add(new TaskData { msg = "Converting image '" + image.Uri + "' to BASIS..." });
                             await RunProcessAsync(exe, args);
+                            // taskTime.Stop();
+                            var ttc = DateTime.Now.Subtract(now).TotalSeconds;
                             completedOperations += 5;
-                            msgQueue.Add(new TaskData { startTime = ttc, name = fileName });
+                            msgQueue.Add(new TaskData { time = Mathf.RoundToInt((float)ttc * 100f) / 100f, name = fileName });
                         } finally {
                             maxThread.Release();
                         }
@@ -401,9 +424,10 @@ public class ImportExport : MonoBehaviour
                 } else {
                     Logging.Log("Converting image '" + image.Uri + "' to BASIS...");
                     await RunProcessAsync(exe, args);
-                    ttc = Time.time - ttc;
+                    // taskTime.Stop();
+                    var ttc = DateTime.Now.Subtract(now).TotalSeconds;
                     completedOperations += 5;
-                    Logging.Log("Finished in " + Mathf.RoundToInt(ttc * 100f) / 100f + " seconds.\n");
+                    Logging.Log("Finished in " + Mathf.RoundToInt((float)ttc * 100f) / 100f + " seconds.\n");
                 }
                 
                 var ext = image.MimeType.ToLower().Replace("image/", "");
@@ -613,9 +637,20 @@ public class ImportExport : MonoBehaviour
 
         var process = new Process
         {
-            StartInfo = { FileName = fileName, Arguments = arguments, WindowStyle = System.Diagnostics.ProcessWindowStyle.Hidden },
+            StartInfo = {
+                FileName = fileName,
+                Arguments = arguments,
+                WindowStyle = System.Diagnostics.ProcessWindowStyle.Maximized,
+                WorkingDirectory = Application.streamingAssetsPath,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true
+            },
             EnableRaisingEvents = true
         };
+
+        #if UNITY_EDITOR_OSX || UNITY_STANDALONE_OSX
+        process.StartInfo.UseShellExecute = false;
+        #endif
 
         try {
             processes.Add(process);
@@ -631,6 +666,9 @@ public class ImportExport : MonoBehaviour
         };
 
         process.Start();
+
+        // UnityEngine.Debug.Log(process.StandardOutput.ReadToEnd());
+        // UnityEngine.Debug.Log(process.StandardError.ReadToEnd());
 
         return tcs.Task;
     }
