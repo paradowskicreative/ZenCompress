@@ -38,7 +38,7 @@ public class MouseOrbitImproved : MonoBehaviour {
  
     void LateUpdate () 
     {
-        if (target) 
+        if (target && !UnityEngine.EventSystems.EventSystem.current.IsPointerOverGameObject()) 
         {   
             if(Input.GetMouseButton(0)) {
                 x += Input.GetAxis("Mouse X") * xSpeed * 0.02f;
