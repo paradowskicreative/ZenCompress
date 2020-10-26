@@ -21,6 +21,10 @@ public class Options : MonoBehaviour
         io.useMultithreading = use;
     }
 
+    public void SetPreserveAlpha(bool use) {
+        io.preserveAlpha = use;
+    }
+
     public void SetQuality(string quality) {
         int q;
         try {

@@ -36,6 +36,7 @@ public class ImportExport : MonoBehaviour
     public bool showPreview = true;
     public bool useMultithreading = false;
     public int quality = 128;
+    public bool preserveAlpha = false;
 
     public GLTFComponent gLTFComponent;
     public MouseOrbitImproved moi;
@@ -118,6 +119,7 @@ public class ImportExport : MonoBehaviour
             importButton.interactable = false;
             // timeToCompletion = new Stopwatch();
             // timeToCompletion.Start();
+            
             var now = DateTime.Now;
             await LoadStream();
             var children = moi.target.GetComponentsInChildren<Transform>();
@@ -149,9 +151,10 @@ public class ImportExport : MonoBehaviour
             var ttc = DateTime.Now.Subtract(now).TotalSeconds;
             Logging.Log("Loaded in " + Mathf.RoundToInt((float)ttc * 100f) / 100f + " seconds.\n");
             loadedText.text = "Loaded: " + Path.GetFileName(importFilePath);
-            gltfLoader.CloseStream();
-            binLoader.CloseStream();
-            imgLoader.CloseStream();
+            
+            // gltfLoader.CloseStream();
+            // binLoader.CloseStream();
+            // imgLoader.CloseStream();
             importButton.interactable = CanImport();
             exportButton.interactable = CanExport();
         } catch(Exception err) {
@@ -199,39 +202,46 @@ public class ImportExport : MonoBehaviour
         directoryPath = Path.GetDirectoryName(importFilePath);
         var filename = Path.GetFileName(importFilePath);
         gltfLoader = new FileLoader(directoryPath);
-
-        await LoadJson(filename);
-        if(!gltfRoot.IsGLB) {
-            var binPath = Path.Combine(directoryPath, gltfRoot.Buffers[0].Uri);
-            binLoader = new FileLoader(binPath);
-            await LoadBin(binPath);
+        using(gltfLoader.thisStream) {
+            await LoadJson(filename);
+            if(!gltfRoot.IsGLB) {
+                var binPath = Path.Combine(directoryPath, gltfRoot.Buffers[0].Uri);
+                binLoader = new FileLoader(binPath);
+                using(binLoader.thisStream) {
+                    await LoadBin(binPath);
+                }
+                binLoader.thisStream.Close();
+            }
         }
+        gltfLoader.thisStream.Close();
 
         imgLoader = new FileLoader(directoryPath);
     }
 
     private async Task AddImage(GLTFImage image, BinaryWriter output, FileLoader loader, int bufferViewId, uint additionalLength) {
         Logging.Log("Adding '" + image.Uri + "' to .glb...");
-        var loaderStream = await loader.LoadStreamAsync(image.Uri);
-        loaderStream.Position = 0;
-        uint offset = (uint)output.BaseStream.Position + additionalLength;
-        var length = GLTFSceneExporter.CalculateAlignment((uint)loaderStream.Length, 4);
-        GLTFSceneExporter.CopyStream(loaderStream, output);
+        using(var loaderStream = await loader.LoadStreamAsync(image.Uri)) {
+            loaderStream.Position = 0;
+            uint offset = (uint)output.BaseStream.Position + additionalLength;
+            var length = GLTFSceneExporter.CalculateAlignment((uint)loaderStream.Length, 4);
+            GLTFSceneExporter.CopyStream(loaderStream, output);
 
-        var bufferImg = glbRoot.Images.First((img) => img.Uri == image.Uri);
-        bufferImg.Uri = null;
-        bufferImg.BufferView = new BufferViewId{
-            Id = bufferViewId,
-            Root = glbRoot
-        };
+            var bufferImg = glbRoot.Images.First((img) => img.Uri == image.Uri);
+            bufferImg.Uri = null;
+            bufferImg.BufferView = new BufferViewId{
+                Id = bufferViewId,
+                Root = glbRoot
+            };
 
-        var bufferView = new BufferView {
-            Buffer = bufferId,
-            ByteLength = length,
-            ByteOffset = offset
-        };
-        
-        glbRoot.BufferViews.Add(bufferView);
+            var bufferView = new BufferView {
+                Buffer = bufferId,
+                ByteLength = length,
+                ByteOffset = offset
+            };
+            
+            glbRoot.BufferViews.Add(bufferView);
+        }
+        loader.thisStream.Close();
     }
 
     private void PrepGLBRoot() {
@@ -394,11 +404,13 @@ public class ImportExport : MonoBehaviour
                 var uriSplit = image.Uri.Split(new char[] {'\\', '/'}).ToList();
                 var fileName = uriSplit[uriSplit.Count - 1];
                 var outputDir = Path.Combine(directoryPath, image.Uri.Substring(0, image.Uri.Length - fileName.Length));
+
+                var input = preserveAlpha ? " -alpha_file " : " -file ";
                 
                 #if UNITY_EDITOR_OSX || UNITY_STANDALONE_OSX
-                var args = "-c './basisu -q " + quality.ToString() + " -comp_level 2 -output_path \"" + outputDir + "\" -file \"" + Path.Combine(directoryPath, image.Uri) + "\"'";
+                var args = "-c './basisu -q " + quality.ToString() + " -comp_level 2 -output_path \"" + outputDir + "\"" + input + "\"" + Path.Combine(directoryPath, image.Uri) + "\"'";
                 #else
-                var args = "-q " + quality.ToString() + " -comp_level 2 -output_path \"" + outputDir + "\" -file " + Path.Combine(directoryPath, image.Uri) + "\"";
+                var args = "-q " + quality.ToString() + " -comp_level 2 -output_path \"" + outputDir + "\"" + input + "\"" + Path.Combine(directoryPath, image.Uri) + "\"";
                 #endif
 
                 // var taskTime = new Stopwatch();
@@ -640,17 +652,18 @@ public class ImportExport : MonoBehaviour
             StartInfo = {
                 FileName = fileName,
                 Arguments = arguments,
-                WindowStyle = System.Diagnostics.ProcessWindowStyle.Maximized,
+                WindowStyle = System.Diagnostics.ProcessWindowStyle.Hidden,
                 WorkingDirectory = Application.streamingAssetsPath,
-                RedirectStandardOutput = true,
-                RedirectStandardError = true
+                #if UNITY_EDITOR_OSX || UNITY_STANDALONE_OSX
+                UseShellExecute = false
+                #endif
             },
             EnableRaisingEvents = true
         };
 
-        #if UNITY_EDITOR_OSX || UNITY_STANDALONE_OSX
-        process.StartInfo.UseShellExecute = false;
-        #endif
+        // #if UNITY_EDITOR_OSX || UNITY_STANDALONE_OSX
+        // process.StartInfo.UseShellExecute = false;
+        // #endif
 
         try {
             processes.Add(process);
