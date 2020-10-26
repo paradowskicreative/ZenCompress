@@ -408,9 +408,9 @@ public class ImportExport : MonoBehaviour
                 var input = preserveAlpha ? " -alpha_file " : " -file ";
                 
                 #if UNITY_EDITOR_OSX || UNITY_STANDALONE_OSX
-                var args = "-c './basisu -q " + quality.ToString() + " -comp_level 2 -output_path \"" + outputDir + "\"" + input + "\"" + Path.Combine(directoryPath, image.Uri) + "\"'";
+                var args = "-c './basisu -q " + quality.ToString() + " -comp_level 2 -output_path \"" + outputDir + "\" -file \"" + Path.Combine(directoryPath, image.Uri) + "\"'";
                 #else
-                var args = "-q " + quality.ToString() + " -comp_level 2 -output_path \"" + outputDir + "\"" + input + "\"" + Path.Combine(directoryPath, image.Uri) + "\"";
+                var args = "-q " + quality.ToString() + " -comp_level 2 -output_path \"" + outputDir + "\" -file \"" + Path.Combine(directoryPath, image.Uri) + "\"";
                 #endif
 
                 // var taskTime = new Stopwatch();
