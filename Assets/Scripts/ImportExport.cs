@@ -16,7 +16,7 @@ using System.Linq;
 using System.Diagnostics;
 using UnityEngine.UI;
 using TMPro;
-// using 
+using SixLabors.ImageSharp;
 
 public class ImportExport : MonoBehaviour
 {
@@ -28,7 +28,7 @@ public class ImportExport : MonoBehaviour
     public TextMeshProUGUI exportedText;
     public Button importButton;
     public Button exportButton;
-    public Image progress;
+    public UnityEngine.UI.Image progress;
 
     public string importFilePath;
     public string exportFilePath;
@@ -94,10 +94,15 @@ public class ImportExport : MonoBehaviour
         public float time;
         public string msg;
     }
+    public static string pdp;
    
     private List<TaskData> msgQueue = new List<TaskData>();
 
     private List<Process> processes = new List<Process>();
+
+    private void Start() {
+        pdp = Application.persistentDataPath;
+    }
     
     public void SetImportPath(string path) {
         importFilePath = path;
@@ -152,9 +157,9 @@ public class ImportExport : MonoBehaviour
             Logging.Log("Loaded in " + Mathf.RoundToInt((float)ttc * 100f) / 100f + " seconds.\n");
             loadedText.text = "Loaded: " + Path.GetFileName(importFilePath);
             
-            // gltfLoader.CloseStream();
-            // binLoader.CloseStream();
-            // imgLoader.CloseStream();
+            gltfLoader.CloseStream();
+            binLoader.CloseStream();
+            imgLoader.CloseStream();
             importButton.interactable = CanImport();
             exportButton.interactable = CanExport();
         } catch(Exception err) {
@@ -262,17 +267,17 @@ public class ImportExport : MonoBehaviour
         if(glbRoot.Samplers.Count == 0) {
             sampler = new Sampler {
                 MagFilter = MagFilterMode.Linear,
-                MinFilter = MinFilterMode.Nearest,
+                MinFilter = MinFilterMode.LinearMipmapLinear,
                 WrapS = GLTF.Schema.WrapMode.Repeat,
                 WrapT = GLTF.Schema.WrapMode.Repeat
             };
 
             glbRoot.Samplers.Add(sampler);
-        } else {
-            foreach(var smplr in glbRoot.Samplers) {
-                smplr.MinFilter = MinFilterMode.Nearest;
-            }
-        }
+        } //else {
+        //     foreach(var smplr in glbRoot.Samplers) {
+        //         smplr.MinFilter = MinFilterMode.Nearest;
+        //     }
+        // }
     }
 
     private async Task ExportStream() {
@@ -391,8 +396,24 @@ public class ImportExport : MonoBehaviour
             var tasks = new List<Task>();
             SemaphoreSlim maxThread = new SemaphoreSlim(4);
             // var taskLists = new List<List<Task>>();
+            var tempPath = Path.Combine(pdp, "Temp");
                         
             foreach(var image in glbRoot.Images) {
+                var newFilePath = Path.Combine(tempPath, Path.GetFileNameWithoutExtension(image.Uri) + ".png");
+                if(image.MimeType != "image/png") {
+                    if(!Directory.Exists(tempPath))
+                        Directory.CreateDirectory(tempPath);
+                    using(var file = SixLabors.ImageSharp.Image.Load(Path.Combine(directoryPath, image.Uri))) {
+                        using(var newFile = File.Create(newFilePath)) {
+                            file.SaveAsPng(newFile); 
+                        }
+                    }
+                }
+
+
+                
+
+
                 token.ThrowIfCancellationRequested();
                 image.Uri = image.Uri.Replace("%20", " ");
                 
@@ -404,13 +425,18 @@ public class ImportExport : MonoBehaviour
                 var uriSplit = image.Uri.Split(new char[] {'\\', '/'}).ToList();
                 var fileName = uriSplit[uriSplit.Count - 1];
                 var outputDir = Path.Combine(directoryPath, image.Uri.Substring(0, image.Uri.Length - fileName.Length));
+                var filePath = "";
+                if(image.MimeType != "image/png")
+                    filePath = newFilePath;
+                else
+                    filePath = Path.Combine(directoryPath, image.Uri);
 
                 var input = preserveAlpha ? " -alpha_file " : " -file ";
                 
                 #if UNITY_EDITOR_OSX || UNITY_STANDALONE_OSX
-                var args = "-c './basisu -q " + quality.ToString() + " -comp_level 2 -output_path \"" + outputDir + "\" -file \"" + Path.Combine(directoryPath, image.Uri) + "\"'";
+                var args = "-c './basisu -q " + quality.ToString() + " -comp_level 2 -output_path \"" + outputDir + "\" -file \"" + filePath + "\" -mipmap'";
                 #else
-                var args = "-q " + quality.ToString() + " -comp_level 2 -output_path \"" + outputDir + "\" -file \"" + Path.Combine(directoryPath, image.Uri) + "\"";
+                var args = "-q " + quality.ToString() + " -comp_level 2 -output_path \"" + outputDir + "\" -file \"" + filePath + "\" -mipmap";
                 #endif
 
                 // var taskTime = new Stopwatch();
@@ -452,7 +478,10 @@ public class ImportExport : MonoBehaviour
             await Task.WhenAll(tasks.ToArray());
             
             msgQueue = new List<TaskData>();
-            queueIndex = 0;             
+            queueIndex = 0;
+
+            if(Directory.Exists(tempPath))
+                Directory.Delete(tempPath, true);
         }
 
         foreach(var texture in glbRoot.Textures) {
