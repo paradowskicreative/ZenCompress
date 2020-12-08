@@ -33,6 +33,7 @@ public class ImportExport : MonoBehaviour
 	public string importFilePath;
 	public string exportFilePath;
 	public bool useExistingBasis = false;
+	public bool convertLightmaps = false;
 	public bool showPreview = true;
 	public bool useMultithreading = true;
 	public int quality = 255;
@@ -200,6 +201,7 @@ public class ImportExport : MonoBehaviour
 			await ExportStream();
 			var ttc = DateTime.Now.Subtract(now).TotalSeconds;
 			Logging.Log("Exported in " + Mathf.RoundToInt((float)ttc * 100f) / 100f + " seconds.\n");
+
 			importButton.interactable = CanImport();
 			exportButton.interactable = CanExport();
 		}
@@ -308,17 +310,13 @@ public class ImportExport : MonoBehaviour
 			};
 
 			glbRoot.Samplers.Add(sampler);
-		} //else {
-		  //     foreach(var smplr in glbRoot.Samplers) {
-		  //         smplr.MinFilter = MinFilterMode.Nearest;
-		  //     }
-		  // }
+		}
 	}
 
 	private async Task ExportStream()
 	{
 		PrepGLBRoot();
-		numberOfOperations = 1 + (glbRoot.Images != null ? glbRoot.Images.Count : 0) * 6 + 1;
+		numberOfOperations = 1 + (glbRoot.Images != null && !useExistingBasis ? glbRoot.Images.Count : 0) * 6 + 1;
 		completedOperations = 0;
 		var fullPath = exportFilePath;//Path.Combine(exportFilePath, fileName) + ".glb";
 
@@ -435,15 +433,140 @@ public class ImportExport : MonoBehaviour
 
 	private async Task Convert(CancellationToken token)
 	{
+		Dictionary<int, int> remap = new Dictionary<int, int>(); // Index of duplicate, index of source.
+
+		for (int i = 0; i < gltfRoot.Textures.Count; i++)
+		{
+			if (remap.ContainsKey(i)) continue;
+
+			var tex = gltfRoot.Textures[i];
+
+			var allMatching = gltfRoot.Textures
+				.Select((texture, index) => new { source = i, duplicate = index, equal = texture.EqualsTexture(tex) }) // Use Select to map data to an anonymous object.
+				.Where(item => item.equal && item.source != item.duplicate) // Select duplicates that are not self.
+				.Select(item => new { item.source, item.duplicate }); // Trim the fat.
+
+			foreach (var match in allMatching)
+			{
+				if (!remap.ContainsKey(match.duplicate))
+					remap.Add(match.duplicate, match.source); // Add duplicates and their sources.
+			}
+		}
+
+		foreach (var entry in remap)
+		{
+			Logging.Log(string.Format("Texture index {1} has duplicate at index {0} - duplicate marked for removal.", entry.Key, entry.Value));
+		}
+
+		foreach (var index in remap.OrderByDescending(item => item.Key))
+		{
+			glbRoot.Textures.RemoveAt(index.Key);
+			Logging.Log(string.Format("Replaced texture indexed {0} with texture indexed {1}.", index.Key, index.Value));
+		}
+
+		foreach (var mat in glbRoot.Materials)
+		{
+			if (mat.EmissiveTexture != null && remap.ContainsKey(mat.EmissiveTexture.Index.Id))
+			{
+				var prevIndex = mat.EmissiveTexture.Index.Id;
+				var newIndex = remap[prevIndex];
+				mat.EmissiveTexture.Index.Id = newIndex;
+				Logging.Log(string.Format("Replaced {0} texture source indexed {1} with texture source indexed {2}.", "emissive", prevIndex, newIndex));
+			}
+
+			if (mat.LightmapTexture != null && remap.ContainsKey(mat.LightmapTexture.Index.Id))
+			{
+				var prevIndex = mat.LightmapTexture.Index.Id;
+				var newIndex = remap[prevIndex];
+				mat.LightmapTexture.Index.Id = newIndex;
+				Logging.Log(string.Format("Replaced {0} texture source indexed {1} with texture source indexed {2}.", "lightmap", prevIndex, newIndex));
+			}
+
+			if (mat.NormalTexture != null && remap.ContainsKey(mat.NormalTexture.Index.Id))
+			{
+				var prevIndex = mat.NormalTexture.Index.Id;
+				var newIndex = remap[prevIndex];
+				mat.NormalTexture.Index.Id = newIndex;
+				Logging.Log(string.Format("Replaced {0} texture source indexed {1} with texture source indexed {2}.", "normal", prevIndex, newIndex));
+			}
+
+			if (mat.OcclusionTexture != null && remap.ContainsKey(mat.OcclusionTexture.Index.Id))
+			{
+				var prevIndex = mat.OcclusionTexture.Index.Id;
+				var newIndex = remap[prevIndex];
+				mat.OcclusionTexture.Index.Id = newIndex;
+				Logging.Log(string.Format("Replaced {0} texture source indexed {1} with texture source indexed {2}.", "occlusion", prevIndex, newIndex));
+			}
+
+			if (mat.PbrMetallicRoughness.BaseColorTexture != null && remap.ContainsKey(mat.PbrMetallicRoughness.BaseColorTexture.Index.Id))
+			{
+				var prevIndex = mat.PbrMetallicRoughness.BaseColorTexture.Index.Id;
+				var newIndex = remap[prevIndex];
+				mat.PbrMetallicRoughness.BaseColorTexture.Index.Id = newIndex;
+				Logging.Log(string.Format("Replaced {0} texture source indexed {1} with texture source indexed {2}.", "base", prevIndex, newIndex));
+			}
+
+			if (mat.PbrMetallicRoughness.MetallicRoughnessTexture != null && remap.ContainsKey(mat.PbrMetallicRoughness.MetallicRoughnessTexture.Index.Id))
+			{
+				var prevIndex = mat.PbrMetallicRoughness.MetallicRoughnessTexture.Index.Id;
+				var newIndex = remap[prevIndex];
+				mat.PbrMetallicRoughness.MetallicRoughnessTexture.Index.Id = newIndex;
+				Logging.Log(string.Format("Replaced {0} texture source indexed {1} with texture source indexed {2}.", "metallic/roughness", prevIndex, newIndex));
+			}
+
+			if (mat.Extensions?.ContainsKey(MOZ_lightmapExtensionFactory.EXTENSION_NAME) == true &&
+				remap.ContainsKey(((MOZ_lightmapExtension)mat.Extensions[MOZ_lightmapExtensionFactory.EXTENSION_NAME]).LightmapInfo.Index.Id))
+			{
+				var prevIndex = ((MOZ_lightmapExtension)mat.Extensions[MOZ_lightmapExtensionFactory.EXTENSION_NAME]).LightmapInfo.Index.Id;
+				var newIndex = remap[prevIndex];
+				((MOZ_lightmapExtension)mat.Extensions[MOZ_lightmapExtensionFactory.EXTENSION_NAME]).LightmapInfo.Index.Id = newIndex;
+				Logging.Log(string.Format("Replaced {0} texture source indexed {1} with texture source indexed {2}.", "MOZ_lightmap", prevIndex, newIndex));
+			}
+		}
+
+
+		List<GLTFImage> imagesToAvoid = new List<GLTFImage>();
+		List<GLTFTexture> texturesToAvoid = new List<GLTFTexture>();
+		if (!convertLightmaps)
+		{
+			foreach (var mat in glbRoot.Materials)
+			{
+				foreach (var image in glbRoot.Images)
+				{
+					if (mat.Extensions != null && mat.Extensions.ContainsKey(MOZ_lightmapExtensionFactory.EXTENSION_NAME))
+					{
+						var lightmapIndex = (MOZ_lightmapExtension)mat.Extensions[MOZ_lightmapExtensionFactory.EXTENSION_NAME];
+						var lightmapTex = glbRoot.Textures.FirstOrDefault(tex => lightmapIndex.LightmapInfo.Index.Id == glbRoot.Textures.IndexOf(tex));
+						if (lightmapTex != null)
+						{
+							if (lightmapTex.Source.Id == glbRoot.Images.IndexOf(image))
+							{
+								texturesToAvoid.Add(lightmapTex);
+								if (imagesToAvoid.Contains(image)) continue;
+								imagesToAvoid.Add(image);
+								if (!useExistingBasis)
+								{
+									Logging.Log("Skipping lightmap: " + image.Uri);
+									completedOperations += 5;
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+
+		List<GLTFImage> imagesToConvert = glbRoot.Images.Except(imagesToAvoid).ToList();
+		List<GLTFTexture> texturesToConvert = glbRoot.Textures.Except(texturesToAvoid).ToList();
+
 
 		if (!useExistingBasis)
 		{
 			var tasks = new List<Task>();
 			SemaphoreSlim maxThread = new SemaphoreSlim(4);
-			// var taskLists = new List<List<Task>>();
 			var tempPath = Path.Combine(pdp, "Temp");
 
-			foreach (var image in glbRoot.Images)
+			foreach (var image in imagesToConvert)
 			{
 				var newFilePath = Path.Combine(tempPath, Path.GetFileNameWithoutExtension(image.Uri) + ".png");
 				if (image.MimeType != "image/png")
@@ -495,6 +618,7 @@ public class ImportExport : MonoBehaviour
 				// var taskTime = new Stopwatch();
 				// taskTime.Start();
 				var now = DateTime.Now;
+				var originalUri = image.Uri;
 
 				if (useMultithreading)
 				{
@@ -504,7 +628,7 @@ public class ImportExport : MonoBehaviour
 					{
 						try
 						{
-							msgQueue.Add(new TaskData { msg = "Converting image '" + image.Uri + "' to BASIS..." });
+							msgQueue.Add(new TaskData { msg = "Converting image '" + originalUri + "' to BASIS..." });
 							await RunProcessAsync(exe, args);
 							// taskTime.Stop();
 							var ttc = DateTime.Now.Subtract(now).TotalSeconds;
@@ -520,7 +644,7 @@ public class ImportExport : MonoBehaviour
 				}
 				else
 				{
-					Logging.Log("Converting image '" + image.Uri + "' to BASIS...");
+					Logging.Log("Converting image '" + originalUri + "' to BASIS...");
 					await RunProcessAsync(exe, args);
 					// taskTime.Stop();
 					var ttc = DateTime.Now.Subtract(now).TotalSeconds;
@@ -544,7 +668,7 @@ public class ImportExport : MonoBehaviour
 				Directory.Delete(tempPath, true);
 		}
 
-		foreach (var texture in glbRoot.Textures)
+		foreach (var texture in texturesToConvert)
 		{
 			var moz = new MozHubsTextureBasisExtension(texture.Source ?? new ImageId());
 
@@ -562,18 +686,20 @@ public class ImportExport : MonoBehaviour
 			}
 		}
 
-		if (glbRoot.ExtensionsUsed == null)
-			glbRoot.ExtensionsUsed = new List<string>();
+		if (texturesToConvert.Count > 0 || imagesToConvert.Count > 0)
+		{
+			if (glbRoot.ExtensionsUsed == null)
+				glbRoot.ExtensionsUsed = new List<string>();
 
-		if (glbRoot.ExtensionsRequired == null)
-			glbRoot.ExtensionsRequired = new List<string>();
+			if (glbRoot.ExtensionsRequired == null)
+				glbRoot.ExtensionsRequired = new List<string>();
 
-		if (!glbRoot.ExtensionsUsed.Contains(MozHubsTextureBasisExtensionFactory.EXTENSION_NAME))
-			glbRoot.ExtensionsUsed.Add(MozHubsTextureBasisExtensionFactory.EXTENSION_NAME);
+			if (!glbRoot.ExtensionsUsed.Contains(MozHubsTextureBasisExtensionFactory.EXTENSION_NAME))
+				glbRoot.ExtensionsUsed.Add(MozHubsTextureBasisExtensionFactory.EXTENSION_NAME);
 
-		if (!glbRoot.ExtensionsRequired.Contains(MozHubsTextureBasisExtensionFactory.EXTENSION_NAME))
-			glbRoot.ExtensionsRequired.Add(MozHubsTextureBasisExtensionFactory.EXTENSION_NAME);
-
+			if (!glbRoot.ExtensionsRequired.Contains(MozHubsTextureBasisExtensionFactory.EXTENSION_NAME))
+				glbRoot.ExtensionsRequired.Add(MozHubsTextureBasisExtensionFactory.EXTENSION_NAME);
+		}
 	}
 
 	private async Task CompleteTasks(Task[] tasks)
@@ -836,5 +962,29 @@ public static class Extensions
 			}
 			writer.WriteEndObject();
 		}
+	}
+
+	public static bool EqualsTexture(this GLTFTexture texture1, GLTFTexture texture2)
+	{
+		var equal = (texture1.Extensions?.Keys == texture2.Extensions?.Keys &&
+					texture1.Extensions?.Values == texture2.Extensions?.Values &&
+					texture1.Name == texture2.Name &&
+					texture1.Sampler?.Id == texture2.Sampler?.Id &&
+					texture1.Source?.Id == texture2.Source?.Id);
+
+		// Logging.Log(equal.ToString());
+		return equal;
+	}
+
+	/// <summary>
+	/// Wraps this object instance into an IEnumerable&lt;T&gt;
+	/// consisting of a single item.
+	/// </summary>
+	/// <typeparam name="T"> Type of the object. </typeparam>
+	/// <param name="item"> The instance that will be wrapped. </param>
+	/// <returns> An IEnumerable&lt;T&gt; consisting of a single item. </returns>
+	public static IEnumerable<T> Yield<T>(this T item)
+	{
+		yield return item;
 	}
 }
