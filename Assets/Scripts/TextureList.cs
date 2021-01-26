@@ -56,6 +56,7 @@ public class TextureList : MonoBehaviour
 
 			textureList.Add(entry.GetComponent<TextureInstance>());
 			entry.transform.parent = this.transform;
+			entry.transform.localScale = Vector3.one;
 
 			textureInstance.Setup();
 
