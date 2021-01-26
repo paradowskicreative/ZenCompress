@@ -1,5 +1,6 @@
 ﻿using System.Collections;
 using System.Collections.Generic;
+using System.Linq;
 using UnityEngine;
 using System;
 using TMPro;
@@ -10,6 +11,12 @@ public class Options : MonoBehaviour
 	public TMP_InputField qualityInput;
 	public TMP_InputField thresholdInput;
 	public TMP_InputField levelInput;
+	public static Options instance;
+
+	void Awake()
+	{
+		instance = this;
+	}
 
 	public void SetUseExistingBasis(bool use)
 	{
@@ -34,6 +41,23 @@ public class Options : MonoBehaviour
 	public void SetConvertLightmaps(bool use)
 	{
 		io.convertLightmaps = use;
+	}
+
+	public void SetTextureToggle(int toggle)
+	{
+		if (toggle < io.conversionToggles.Length)
+		{
+			io.conversionToggles[toggle] ^= true;
+
+			var group = TextureList.instance.textureList.Where(entry => entry.mapType == (TextureList.MapType)toggle);
+
+			foreach (var item in group)
+			{
+				item.toggled = io.conversionToggles[toggle];
+				item.toggle.isOn = io.conversionToggles[toggle];
+			}
+
+		}
 	}
 
 	public void SetQuality(string quality)

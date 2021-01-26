@@ -75,6 +75,14 @@ public class ImportExport : MonoBehaviour
 		public List<GLTFImage> images;
 	}
 
+	struct Duplicate
+	{
+		public int source;
+		public List<int> duplicates;
+		public int newSource;
+		public string imageName;
+	}
+
 	private FileLoader gltfLoader;
 	private Stream loadedGltfStream;
 	private FileLoader binLoader;
@@ -99,6 +107,23 @@ public class ImportExport : MonoBehaviour
 		public float time;
 		public string msg;
 	}
+
+	struct TextureEntry
+	{
+		public int index;
+		public string id;
+		public int map;
+	}
+
+	public bool[] conversionToggles = new bool[]{
+		true,  // Diffuse
+		false, // Normal
+		false, // Lightmap
+		true,  // MetalRough
+		true,  // Emissive
+		true   // Occlusion
+	};
+
 	public static string pdp;
 
 	private List<TaskData> msgQueue = new List<TaskData>();
@@ -162,8 +187,6 @@ public class ImportExport : MonoBehaviour
 				else
 					moi.distance = (bounds.extents.magnitude / Camera.main.aspect) * 1.5f / Mathf.Tan(Camera.main.fieldOfView * 0.5f * Mathf.Deg2Rad);
 
-
-
 			}
 			// timeToCompletion.Stop();
 			var ttc = DateTime.Now.Subtract(now).TotalSeconds;
@@ -183,9 +206,68 @@ public class ImportExport : MonoBehaviour
 		}
 		finally
 		{
+			PopulateImageList();
 			importButton.interactable = CanImport();
 			exportButton.interactable = CanExport();
 		}
+	}
+
+	private void PopulateImageList()
+	{
+		var list = new List<TextureList.Image>();
+		var previousIds = new List<int>();
+		for (int i = 0; i < gltfRoot.Textures.Count; i++)
+		{
+			var texture = gltfRoot.Textures[i];
+			var id = texture.Source.Id;
+			if (previousIds.Contains(id)) continue;
+			previousIds.Add(id);
+			var image = gltfRoot.Images[id];
+
+			var mapType = GetMapType(i);
+
+			var entry = new TextureList.Image()
+			{
+				name = image.Name,
+				URI = image.Uri,
+				mapType = mapType,
+				toggled = conversionToggles[(int)mapType]
+			};
+
+			list.Add(entry);
+		}
+
+		TextureList.instance.PopulateFromImages(list);
+	}
+
+	private TextureList.MapType GetMapType(int index)
+	{
+		TextureList.MapType mapType = TextureList.MapType.DIFFUSE;
+
+		// * We need to find a Material that uses a Texture (indexed) that uses our Image (indexed).
+
+		// Funnel materials' map IDs into more digestable objects.
+		var match = gltfRoot.Materials.Select((mat, i) => new Dictionary<int, int>
+		{
+			{0, mat.PbrMetallicRoughness?.BaseColorTexture?.Index.Id ?? -1},
+			{1, mat.NormalTexture?.Index.Id ?? -1},
+			{2, mat.LightmapTexture?.Index.Id ?? ((MOZ_lightmapExtension)mat.Extensions?[MOZ_lightmapExtensionFactory.EXTENSION_NAME])?.LightmapInfo.Index.Id ?? -1},
+			{3, mat.PbrMetallicRoughness?.MetallicRoughnessTexture?.Index.Id ?? -1},
+			{4, mat.EmissiveTexture?.Index.Id ?? -1},
+			{5, mat.OcclusionTexture?.Index.Id ?? -1}
+		}).FirstOrDefault(mat =>
+			mat[0] == index ||
+			mat[1] == index ||
+			mat[2] == index ||
+			mat[3] == index ||
+			mat[4] == index ||
+			mat[5] == index
+		).DefaultIfEmpty(new KeyValuePair<int, int>(0, -1)).First(type => type.Value == index).Key;
+
+		if (match != -1)
+			mapType = (TextureList.MapType)match;
+
+		return mapType;
 	}
 
 	private async Task ExportGLB()
@@ -431,13 +513,91 @@ public class ImportExport : MonoBehaviour
 		}
 	}
 
+	private void RemoveDuplicates()
+	{
+		// Dictionary<int, int> remap = new Dictionary<int, int>(); // Index of duplicate, index of source.
+		// List<Duplicate> duplicateMap = new List<Duplicate>();
+
+		// // var remap2 = new List<TextureEntry>();
+		// // int dupeCount = 0;
+		// for (int i = 0; i < gltfRoot.Textures.Count; i++)
+		// {
+		// 	if (remap.ContainsKey(i)) continue;
+		// 	// if(remap2.Any(entry => entry.index == i)) continue;
+
+		// 	var tex = gltfRoot.Textures[i];
+
+		// 	var allMatching = gltfRoot.Textures
+		// 		.Select((texture, index) => new { source = i, duplicate = index, equal = texture.EqualsTexture(tex) }) // Use Select to map data to an anonymous object.
+		// 		.Where(item => item.equal && item.source != item.duplicate) // Select duplicates that are not self.
+		// 		.Select(item => new { item.source, item.duplicate }); // Trim the fat.
+
+		// 	if (allMatching.Count() == 0) continue;
+
+		// 	// dupeCount++;
+
+		// 	var dupe = new Duplicate
+		// 	{
+		// 		source = i,
+		// 		duplicates = new List<int>()
+		// 	};
+		// 	foreach (var match in allMatching)
+		// 	{
+		// 		if (!remap.ContainsKey(match.duplicate))
+		// 		{
+		// 			remap.Add(match.duplicate, match.source); // Add duplicates and their sources.
+		// 			dupe.duplicates.Add(match.duplicate);
+		// 		}
+
+		// 		// 		// if (remap2.Any(entry => entry.index == match.duplicate ))
+		// 		// 		// 	remap2.Add(new TextureEntry(){ index = match.duplicate, map = match.source, id = match.duplicate.ToString()});
+		// 	}
+		// 	duplicateMap.Add(dupe);
+		// }
+
+		// var n = 0;
+		// var duplicateAggregate = new List<int>();
+		// duplicateMap.ForEach(mapEntry =>
+		// {
+		// 	// Add to n the number of duplicates in the duplicate aggregrate that are below the source.
+
+		// 	n = duplicateAggregate.Aggregate(0, (total, next) => next < mapEntry.source ? total + 1 : total);
+		// 	print("n: " + n);
+
+		// 	// var current = n;
+		// 	mapEntry.duplicates.ForEach(duplicate =>
+		// 	{
+		// 		// n = duplicateAggregate.Aggregate(current, (total, next) => next < duplicate ? total + 1 : total);
+		// 		// print("n: " + n);
+		// 		mapEntry.newSource = Mathf.Clamp(mapEntry.source - n, 0, int.MaxValue);
+		// 		duplicateAggregate.Add(duplicate);
+		// 		print("source: " + mapEntry.source + " | duplicate: " + duplicate + " | new source: " + mapEntry.newSource);
+		// 	});
+
+		// 	// n += mapEntry.duplicates.Count;
+		// });
+
+	}
+
 	private async Task Convert(CancellationToken token)
 	{
-		Dictionary<int, int> remap = new Dictionary<int, int>(); // Index of duplicate, index of source.
 
+		foreach (var image in glbRoot.Images)
+		{
+			image.Uri = image.Uri.Replace("%20", " ");
+		}
+
+
+		/*
+		Dictionary<int, int> remap = new Dictionary<int, int>(); // Index of duplicate, index of source.
+		List<Duplicate> duplicateMap = new List<Duplicate>();
+
+		// var remap2 = new List<TextureEntry>();
+		// int dupeCount = 0;
 		for (int i = 0; i < gltfRoot.Textures.Count; i++)
 		{
-			if (remap.ContainsKey(i)) continue;
+			// if (remap.ContainsKey(i)) continue;
+			// if(remap2.Any(entry => entry.index == i)) continue;
 
 			var tex = gltfRoot.Textures[i];
 
@@ -446,127 +606,199 @@ public class ImportExport : MonoBehaviour
 				.Where(item => item.equal && item.source != item.duplicate) // Select duplicates that are not self.
 				.Select(item => new { item.source, item.duplicate }); // Trim the fat.
 
-			foreach (var match in allMatching)
+
+			var dupe = new Duplicate
 			{
-				if (!remap.ContainsKey(match.duplicate))
-					remap.Add(match.duplicate, match.source); // Add duplicates and their sources.
+				source = i,
+				duplicates = new List<int>()
+			};
+			if (allMatching.Count() != 0)
+			{
+				foreach (var match in allMatching)
+				{
+					if (!remap.ContainsKey(match.duplicate))
+					{
+						remap.Add(match.duplicate, match.source); // Add duplicates and their sources.
+						dupe.duplicates.Add(match.duplicate);
+					}
+
+					// 		// if (remap2.Any(entry => entry.index == match.duplicate ))
+					// 		// 	remap2.Add(new TextureEntry(){ index = match.duplicate, map = match.source, id = match.duplicate.ToString()});
+				}
+
 			}
+			duplicateMap.Add(dupe);
+			print(string.Format("Source: {0} | Dupe: {1}", dupe.source, dupe.duplicates.Count));
 		}
 
-		foreach (var entry in remap)
+		var n = 0;
+		var duplicateAggregate = new List<int>();
+		var newSourceMap = new List<Duplicate>();
+		duplicateMap.ForEach(mapEntry =>
 		{
-			Logging.Log(string.Format("Texture index {1} has duplicate at index {0} - duplicate marked for removal.", entry.Key, entry.Value));
-		}
+			var newSourceEntry = mapEntry;
 
-		foreach (var index in remap.OrderByDescending(item => item.Key))
-		{
-			glbRoot.Textures.RemoveAt(index.Key);
-			Logging.Log(string.Format("Replaced texture indexed {0} with texture indexed {1}.", index.Key, index.Value));
-		}
+			// Add to n the number of duplicates in the duplicate aggregrate that are below the source.
+			n = duplicateAggregate.Aggregate(0, (total, next) => next < mapEntry.source ? total + 1 : total);
+
+			newSourceEntry.newSource = Mathf.Clamp(mapEntry.source - n, 0, int.MaxValue);
+
+			var d = 0;
+			mapEntry.duplicates.ForEach(duplicate =>
+			{
+				duplicateAggregate.Add(duplicate);
+				d++;
+			});
+
+			// print("source: " + newSourceEntry.source + " | duplicate: " + d + " | new source: " + newSourceEntry.newSource);
+
+			newSourceMap.Add(newSourceEntry);
+		});
 
 		foreach (var mat in glbRoot.Materials)
 		{
-			if (mat.EmissiveTexture != null && remap.ContainsKey(mat.EmissiveTexture.Index.Id))
+			newSourceMap.ForEach(mapEntry =>
 			{
-				var prevIndex = mat.EmissiveTexture.Index.Id;
-				var newIndex = remap[prevIndex];
-				mat.EmissiveTexture.Index.Id = newIndex;
-				Logging.Log(string.Format("Replaced {0} texture source indexed {1} with texture source indexed {2}.", "emissive", prevIndex, newIndex));
-			}
+				// print(string.Format("Source: {0} | Duplicates: {1} | New Source: {2}", mapEntry.source, mapEntry.duplicates.Count, mapEntry.newSource));
+				if (mat.EmissiveTexture != null &&
+					mapEntry.source != mapEntry.newSource &&
+					(mapEntry.duplicates.Any(dupe => dupe == mat.EmissiveTexture.Index.Id) || mapEntry.source == mat.EmissiveTexture.Index.Id))
+				{
+					var prevIndex = mat.EmissiveTexture.Index.Id;
+					var newIndex = mapEntry.newSource;
+					mat.EmissiveTexture.Index.Id = newIndex;
+					Logging.Log(string.Format("Replaced {0} texture source indexed {1} with texture source indexed {2}.", "emissive", prevIndex, newIndex));
+				}
 
-			if (mat.LightmapTexture != null && remap.ContainsKey(mat.LightmapTexture.Index.Id))
-			{
-				var prevIndex = mat.LightmapTexture.Index.Id;
-				var newIndex = remap[prevIndex];
-				mat.LightmapTexture.Index.Id = newIndex;
-				Logging.Log(string.Format("Replaced {0} texture source indexed {1} with texture source indexed {2}.", "lightmap", prevIndex, newIndex));
-			}
+				if (mat.LightmapTexture != null &&
+					mapEntry.source != mapEntry.newSource &&
+					(mapEntry.duplicates.Any(dupe => dupe == mat.LightmapTexture.Index.Id) || mapEntry.source == mat.LightmapTexture.Index.Id))
+				{
+					var prevIndex = mat.LightmapTexture.Index.Id;
+					var newIndex = mapEntry.newSource;
+					mat.LightmapTexture.Index.Id = newIndex;
+					Logging.Log(string.Format("Replaced {0} texture source indexed {1} with texture source indexed {2}.", "lightmap", prevIndex, newIndex));
+				}
 
-			if (mat.NormalTexture != null && remap.ContainsKey(mat.NormalTexture.Index.Id))
-			{
-				var prevIndex = mat.NormalTexture.Index.Id;
-				var newIndex = remap[prevIndex];
-				mat.NormalTexture.Index.Id = newIndex;
-				Logging.Log(string.Format("Replaced {0} texture source indexed {1} with texture source indexed {2}.", "normal", prevIndex, newIndex));
-			}
+				if (mat.NormalTexture != null &&
+					mapEntry.source != mapEntry.newSource &&
+					(mapEntry.duplicates.Any(dupe => dupe == mat.NormalTexture.Index.Id) || mapEntry.source == mat.NormalTexture.Index.Id))
+				{
+					var prevIndex = mat.NormalTexture.Index.Id;
+					var newIndex = mapEntry.newSource;
+					mat.NormalTexture.Index.Id = newIndex;
+					Logging.Log(string.Format("Replaced {0} texture source indexed {1} with texture source indexed {2}.", "normal", prevIndex, newIndex));
+				}
 
-			if (mat.OcclusionTexture != null && remap.ContainsKey(mat.OcclusionTexture.Index.Id))
-			{
-				var prevIndex = mat.OcclusionTexture.Index.Id;
-				var newIndex = remap[prevIndex];
-				mat.OcclusionTexture.Index.Id = newIndex;
-				Logging.Log(string.Format("Replaced {0} texture source indexed {1} with texture source indexed {2}.", "occlusion", prevIndex, newIndex));
-			}
+				if (mat.OcclusionTexture != null &&
+					mapEntry.source != mapEntry.newSource &&
+					(mapEntry.duplicates.Any(dupe => dupe == mat.OcclusionTexture.Index.Id) || mapEntry.source == mat.OcclusionTexture.Index.Id))
+				{
+					var prevIndex = mat.OcclusionTexture.Index.Id;
+					var newIndex = mapEntry.newSource;
+					mat.OcclusionTexture.Index.Id = newIndex;
+					Logging.Log(string.Format("Replaced {0} texture source indexed {1} with texture source indexed {2}.", "occlusion", prevIndex, newIndex));
+				}
 
-			if (mat.PbrMetallicRoughness.BaseColorTexture != null && remap.ContainsKey(mat.PbrMetallicRoughness.BaseColorTexture.Index.Id))
-			{
-				var prevIndex = mat.PbrMetallicRoughness.BaseColorTexture.Index.Id;
-				var newIndex = remap[prevIndex];
-				mat.PbrMetallicRoughness.BaseColorTexture.Index.Id = newIndex;
-				Logging.Log(string.Format("Replaced {0} texture source indexed {1} with texture source indexed {2}.", "base", prevIndex, newIndex));
-			}
+				if (mat.PbrMetallicRoughness.BaseColorTexture != null &&
+					mapEntry.source != mapEntry.newSource &&
+					(mapEntry.duplicates.Any(dupe => dupe == mat.PbrMetallicRoughness.BaseColorTexture.Index.Id) || mapEntry.source == mat.PbrMetallicRoughness.BaseColorTexture.Index.Id))
+				{
+					var prevIndex = mat.PbrMetallicRoughness.BaseColorTexture.Index.Id;
+					var newIndex = mapEntry.newSource;
+					mat.PbrMetallicRoughness.BaseColorTexture.Index.Id = newIndex;
+					Logging.Log(string.Format("Replaced {0} texture source indexed {1} with texture source indexed {2}.", "diffuse", prevIndex, newIndex));
+				}
 
-			if (mat.PbrMetallicRoughness.MetallicRoughnessTexture != null && remap.ContainsKey(mat.PbrMetallicRoughness.MetallicRoughnessTexture.Index.Id))
-			{
-				var prevIndex = mat.PbrMetallicRoughness.MetallicRoughnessTexture.Index.Id;
-				var newIndex = remap[prevIndex];
-				mat.PbrMetallicRoughness.MetallicRoughnessTexture.Index.Id = newIndex;
-				Logging.Log(string.Format("Replaced {0} texture source indexed {1} with texture source indexed {2}.", "metallic/roughness", prevIndex, newIndex));
-			}
+				if (mat.PbrMetallicRoughness.MetallicRoughnessTexture != null &&
+					mapEntry.source != mapEntry.newSource &&
+					(mapEntry.duplicates.Any(dupe => dupe == mat.PbrMetallicRoughness.MetallicRoughnessTexture.Index.Id) || mapEntry.source == mat.PbrMetallicRoughness.MetallicRoughnessTexture.Index.Id))
+				{
+					var prevIndex = mat.PbrMetallicRoughness.MetallicRoughnessTexture.Index.Id;
+					var newIndex = mapEntry.newSource;
+					mat.PbrMetallicRoughness.MetallicRoughnessTexture.Index.Id = newIndex;
+					Logging.Log(string.Format("Replaced {0} texture source indexed {1} with texture source indexed {2}.", "metallic/roughness", prevIndex, newIndex));
+				}
 
-			if (mat.Extensions?.ContainsKey(MOZ_lightmapExtensionFactory.EXTENSION_NAME) == true &&
-				remap.ContainsKey(((MOZ_lightmapExtension)mat.Extensions[MOZ_lightmapExtensionFactory.EXTENSION_NAME]).LightmapInfo.Index.Id))
-			{
-				var prevIndex = ((MOZ_lightmapExtension)mat.Extensions[MOZ_lightmapExtensionFactory.EXTENSION_NAME]).LightmapInfo.Index.Id;
-				var newIndex = remap[prevIndex];
-				((MOZ_lightmapExtension)mat.Extensions[MOZ_lightmapExtensionFactory.EXTENSION_NAME]).LightmapInfo.Index.Id = newIndex;
-				Logging.Log(string.Format("Replaced {0} texture source indexed {1} with texture source indexed {2}.", "MOZ_lightmap", prevIndex, newIndex));
-			}
-		}
+				if (mat.Extensions?.ContainsKey(MOZ_lightmapExtensionFactory.EXTENSION_NAME) == true &&
+					mapEntry.source != mapEntry.newSource &&
+					(mapEntry.duplicates.Any(dupe => dupe == ((MOZ_lightmapExtension)mat.Extensions[MOZ_lightmapExtensionFactory.EXTENSION_NAME]).LightmapInfo.Index.Id) ||
+					mapEntry.source == ((MOZ_lightmapExtension)mat.Extensions[MOZ_lightmapExtensionFactory.EXTENSION_NAME]).LightmapInfo.Index.Id))
+				{
+					var prevIndex = ((MOZ_lightmapExtension)mat.Extensions[MOZ_lightmapExtensionFactory.EXTENSION_NAME]).LightmapInfo.Index.Id;
+					var newIndex = mapEntry.newSource;
+					((MOZ_lightmapExtension)mat.Extensions[MOZ_lightmapExtensionFactory.EXTENSION_NAME]).LightmapInfo.Index.Id = newIndex;
+					Logging.Log(string.Format("Replaced {0} texture source indexed {1} with texture source indexed {2}.", "Hubs lightmap", prevIndex, newIndex));
+				}
+			});
+		}*/
 
 
 		List<GLTFImage> imagesToAvoid = new List<GLTFImage>();
 		List<GLTFTexture> texturesToAvoid = new List<GLTFTexture>();
-		if (!convertLightmaps)
+		/*if (!convertLightmaps)
 		{
 			foreach (var mat in glbRoot.Materials)
 			{
-				foreach (var image in glbRoot.Images)
+				// foreach (var texture in glbRoot.Textures)
+				// {
+				if (mat.Extensions != null && mat.Extensions.ContainsKey(MOZ_lightmapExtensionFactory.EXTENSION_NAME))
 				{
-					if (mat.Extensions != null && mat.Extensions.ContainsKey(MOZ_lightmapExtensionFactory.EXTENSION_NAME))
+					var lightmapIndex = ((MOZ_lightmapExtension)mat.Extensions[MOZ_lightmapExtensionFactory.EXTENSION_NAME]).LightmapInfo.Index.Id; // Refers to index of texture
+					var lightmapTex = glbRoot.Textures.FirstOrDefault(tex => lightmapIndex == glbRoot.Textures.IndexOf(tex)); // The texture 
+																															  // var lightmapTex = glbRoot.Textures[lightmapIndex];
+																															  // Logging.Log(lightmapIndex + " : " + lightmapTex?.Source.Id + " : " + glbRoot.Textures.IndexOf(lightmapTex));
+					if (lightmapTex != null)
 					{
-						var lightmapIndex = (MOZ_lightmapExtension)mat.Extensions[MOZ_lightmapExtensionFactory.EXTENSION_NAME];
-						var lightmapTex = glbRoot.Textures.FirstOrDefault(tex => lightmapIndex.LightmapInfo.Index.Id == glbRoot.Textures.IndexOf(tex));
-						if (lightmapTex != null)
+						// if (lightmapTex.Source.Id == tex.Source.Id)
+						// {
+						var imageIndex = lightmapTex.Source.Id;
+						texturesToAvoid.Add(lightmapTex);
+						if (imagesToAvoid.Contains(glbRoot.Images[imageIndex])) continue;
+						imagesToAvoid.Add(glbRoot.Images[imageIndex]);
+						if (!useExistingBasis)
 						{
-							if (lightmapTex.Source.Id == glbRoot.Images.IndexOf(image))
-							{
-								texturesToAvoid.Add(lightmapTex);
-								if (imagesToAvoid.Contains(image)) continue;
-								imagesToAvoid.Add(image);
-								if (!useExistingBasis)
-								{
-									Logging.Log("Skipping lightmap: " + image.Uri);
-									completedOperations += 5;
-								}
-							}
+							Logging.Log("Skipping lightmap: " + glbRoot.Images[imageIndex].Uri);
+							completedOperations += 5;
 						}
+						// }
 					}
 				}
+				// }
 			}
+		}*/
+
+		foreach (var texInst in TextureList.instance.textureList)
+		{
+			var img = glbRoot.Images.FirstOrDefault(image => glbRoot.Images.IndexOf(image) == texInst.imageIndex && !texInst.toggled);
+			if (img != null)
+				imagesToAvoid.Add(img);
+
+			var texes = glbRoot.Textures.Where(texture => texture.Source.Id == texInst.imageIndex && !texInst.toggled);
+			foreach (var tex in texes)
+				texturesToAvoid.Add(tex);
 		}
 
 		List<GLTFImage> imagesToConvert = glbRoot.Images.Except(imagesToAvoid).ToList();
 		List<GLTFTexture> texturesToConvert = glbRoot.Textures.Except(texturesToAvoid).ToList();
 
 
-		if (!useExistingBasis)
-		{
-			var tasks = new List<Task>();
-			SemaphoreSlim maxThread = new SemaphoreSlim(4);
-			var tempPath = Path.Combine(pdp, "Temp");
 
-			foreach (var image in imagesToConvert)
+		var tasks = new List<Task>();
+		SemaphoreSlim maxThread = new SemaphoreSlim(4);
+		var tempPath = Path.Combine(pdp, "Temp");
+
+		foreach (var image in imagesToConvert)
+		{
+			var nonBasisPath = Path.Combine(directoryPath, image.Uri);
+			var filenameWith = Path.GetFileName(nonBasisPath);
+			var filenameWithout = Path.GetFileNameWithoutExtension(nonBasisPath);
+			var nonBasisDirectory = nonBasisPath.Replace(filenameWith, "");
+			var basisPath = Path.Combine(nonBasisDirectory, filenameWithout + ".basis");
+
+			var doesExist = File.Exists(basisPath);
+			print(basisPath + " | " + doesExist);
+			if (!useExistingBasis || !doesExist)
 			{
 				var newFilePath = Path.Combine(tempPath, Path.GetFileNameWithoutExtension(image.Uri) + ".png");
 				if (image.MimeType != "image/png")
@@ -582,12 +814,7 @@ public class ImportExport : MonoBehaviour
 					}
 				}
 
-
-
-
-
 				token.ThrowIfCancellationRequested();
-				image.Uri = image.Uri.Replace("%20", " ");
 
 #if UNITY_EDITOR_OSX || UNITY_STANDALONE_OSX
 				var exe = "/bin/bash";
@@ -651,22 +878,24 @@ public class ImportExport : MonoBehaviour
 					completedOperations += 5;
 					Logging.Log("Finished in " + Mathf.RoundToInt((float)ttc * 100f) / 100f + " seconds.\n");
 				}
-
-				var ext = image.MimeType.ToLower().Replace("image/", "");
-				image.MimeType = "image/basis";
-				Regex rgx = new Regex(@"\.(?:.(?!\.))+$");
-				image.Uri = image.Uri.Replace(rgx.Match(image.Uri).Value, ".basis");
-
 			}
 
-			await Task.WhenAll(tasks.ToArray());
+			var ext = image.MimeType.ToLower().Replace("image/", "");
+			image.MimeType = "image/basis";
+			Regex rgx = new Regex(@"\.(?:.(?!\.))+$");
+			image.Uri = image.Uri.Replace(rgx.Match(image.Uri).Value, ".basis");
 
-			msgQueue = new List<TaskData>();
-			queueIndex = 0;
-
-			if (Directory.Exists(tempPath))
-				Directory.Delete(tempPath, true);
 		}
+
+		// if (!useExistingBasis)
+		await Task.WhenAll(tasks.ToArray());
+
+		msgQueue = new List<TaskData>();
+		queueIndex = 0;
+
+		if (Directory.Exists(tempPath))
+			Directory.Delete(tempPath, true);
+
 
 		foreach (var texture in texturesToConvert)
 		{
