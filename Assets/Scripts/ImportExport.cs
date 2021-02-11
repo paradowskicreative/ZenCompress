@@ -771,7 +771,6 @@ public class ImportExport : MonoBehaviour
 
 		foreach (var texInst in TextureList.instance.textureList)
 		{
-			print(texInst.URI + " : " + texInst.toggled);
 			var img = glbRoot.Images.FirstOrDefault(image => glbRoot.Images.IndexOf(image) == texInst.imageIndex && !texInst.toggled);
 			if (img != null)
 				imagesToAvoid.Add(img);

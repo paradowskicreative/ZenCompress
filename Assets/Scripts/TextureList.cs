@@ -39,7 +39,7 @@ public class TextureList : MonoBehaviour
 		{
 			var go = textureList[i - 1];
 			textureList.RemoveAt(i - 1);
-			Destroy(go);
+			Destroy(go.gameObject);
 		}
 
 		for (int i = 0; i < images.Count; i++)
