@@ -6,6 +6,7 @@ public class MouseOrbitImproved : MonoBehaviour
 {
 
 	public Transform target;
+	public Transform preview;
 	public float distance = 5.0f;
 	public float xSpeed = 120.0f;
 	public float ySpeed = 120.0f;
@@ -22,6 +23,9 @@ public class MouseOrbitImproved : MonoBehaviour
 
 	float x = 0.0f;
 	float y = 0.0f;
+
+	float offset_x = 0.0f;
+	float offset_y = 0.0f;
 
 	// Use this for initialization
 	void Start()
@@ -43,11 +47,24 @@ public class MouseOrbitImproved : MonoBehaviour
 	{
 		if (target && !startedOverUI)
 		{
+			offset_x = 0f;
+			offset_y = 0f;
 			if (Input.GetMouseButton(0))
 			{
 				x += Input.GetAxis("Mouse X") * xSpeed * 0.02f;
 				y -= Input.GetAxis("Mouse Y") * ySpeed * 0.02f;
 			}
+			else if (Input.GetMouseButton(2))
+			{
+				offset_x = -Input.GetAxis("Mouse X") * xSpeed * 0.02f;
+				offset_y = -Input.GetAxis("Mouse Y") * ySpeed * 0.02f;
+			}
+
+			target.rotation = transform.rotation;
+
+			var offset = new Vector3(offset_x, offset_y, 0);
+			target.Translate(offset, Space.Self);
+			transform.Translate(offset, Space.Self);
 
 			y = ClampAngle(y, yMinLimit, yMaxLimit);
 
@@ -71,7 +88,7 @@ public class MouseOrbitImproved : MonoBehaviour
 
 	void Update()
 	{
-		if (Input.GetMouseButtonDown(0))
+		if (Input.GetMouseButtonDown(0) || Input.GetMouseButtonDown(2))
 		{
 			startedOverUI = UnityEngine.EventSystems.EventSystem.current.IsPointerOverGameObject();
 		}
@@ -79,8 +96,9 @@ public class MouseOrbitImproved : MonoBehaviour
 		// {
 		// 	startedOverUI = true;
 		// }
-		else if (Input.GetMouseButtonUp(0))// || !UnityEngine.EventSystems.EventSystem.current.IsPointerOverGameObject())
+		else if (Input.GetMouseButtonUp(0) || Input.GetMouseButtonDown(2))// || !UnityEngine.EventSystems.EventSystem.current.IsPointerOverGameObject())
 			startedOverUI = false;
+
 	}
 
 	public static float ClampAngle(float angle, float min, float max)

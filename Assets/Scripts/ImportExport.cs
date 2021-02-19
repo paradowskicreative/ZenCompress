@@ -172,7 +172,7 @@ public class ImportExport : MonoBehaviour
 			{
 				Logging.Log("Loading preview...");
 				await LoadModel();
-				children = moi.target.GetComponentsInChildren<Transform>();
+				children = moi.preview.GetComponentsInChildren<Transform>();
 				var colliders = new List<BoxCollider>();
 				Bounds bounds = new Bounds();
 				foreach (var child in children)
