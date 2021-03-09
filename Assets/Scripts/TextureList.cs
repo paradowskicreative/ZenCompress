@@ -1,6 +1,7 @@
 ﻿using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
+using System.Linq;
 using UnityEngine.UI;
 using TMPro;
 
@@ -42,16 +43,20 @@ public class TextureList : MonoBehaviour
 			Destroy(go.gameObject);
 		}
 
-		for (int i = 0; i < images.Count; i++)
+		// Order the list.
+		var orderedImages = images.OrderBy(img => img.name).ToList();
+		orderedImages = orderedImages.OrderBy(img => img.mapType).ToList();
+
+		for (int i = 0; i < orderedImages.Count; i++)
 		{
 			var entry = Instantiate(textureEntryPrefab) as GameObject;
 			var textureInstance = entry.GetComponent<TextureInstance>();
 
-			textureInstance.mapType = images[i].mapType;
-			textureInstance.name = images[i].name;
-			textureInstance.imageIndex = images[i].imageIndex;
-			textureInstance.URI = images[i].URI;
-			textureInstance.toggled = images[i].toggled;
+			textureInstance.mapType = orderedImages[i].mapType;
+			textureInstance.name = orderedImages[i].name;
+			textureInstance.imageIndex = orderedImages[i].imageIndex;
+			textureInstance.URI = orderedImages[i].URI;
+			textureInstance.toggled = orderedImages[i].toggled;
 
 
 			textureList.Add(entry.GetComponent<TextureInstance>());
@@ -59,12 +64,8 @@ public class TextureList : MonoBehaviour
 			entry.transform.localScale = Vector3.one;
 
 			textureInstance.Setup();
-
-
-			// entry.AddComponent<LayoutElement>();
 		}
 
-		// LayoutRebuilder.ForceRebuildLayoutImmediate((RectTransform)this.transform);
 	}
 
 	public void ToggleGroups(int toggle)

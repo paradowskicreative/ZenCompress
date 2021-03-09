@@ -56,8 +56,8 @@ public class MouseOrbitImproved : MonoBehaviour
 			}
 			else if (Input.GetMouseButton(2))
 			{
-				offset_x = -Input.GetAxis("Mouse X") * xSpeed * 0.02f;
-				offset_y = -Input.GetAxis("Mouse Y") * ySpeed * 0.02f;
+				offset_x = -Input.GetAxis("Mouse X") * xSpeed * 0.00015f * distance;
+				offset_y = -Input.GetAxis("Mouse Y") * ySpeed * 0.00015f * distance;
 			}
 
 			target.rotation = transform.rotation;

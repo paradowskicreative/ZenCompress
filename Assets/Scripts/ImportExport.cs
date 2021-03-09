@@ -162,10 +162,10 @@ public class ImportExport : MonoBehaviour
 
 			var now = DateTime.Now;
 			await LoadStream();
-			var children = moi.target.GetComponentsInChildren<Transform>();
+			var children = moi.preview.GetComponentsInChildren<Transform>();
 			foreach (var child in children)
 			{
-				if (child.gameObject.GetInstanceID() != moi.target.gameObject.GetInstanceID())
+				if (child.gameObject.GetInstanceID() != moi.preview.gameObject.GetInstanceID())
 					Destroy(child.gameObject);
 			}
 			if (showPreview)
@@ -181,6 +181,8 @@ public class ImportExport : MonoBehaviour
 					if (child.gameObject.TryGetComponent<BoxCollider>(out boxCollider))
 						bounds.Encapsulate(boxCollider.bounds);
 				}
+
+				moi.target.position = Vector3.zero;
 
 				if (Camera.main.aspect >= 1f)
 					moi.distance = bounds.extents.magnitude * 1.5f / Mathf.Tan(Camera.main.fieldOfView * 0.5f * Mathf.Deg2Rad);
