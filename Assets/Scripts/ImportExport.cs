@@ -83,6 +83,26 @@ public class ImportExport : MonoBehaviour
 		public string imageName;
 	}
 
+	struct Adjusted
+	{
+		public bool normal;
+		public bool metrough;
+		public bool diffuse;
+		public bool lightmap;
+		public bool emissive;
+		public bool occlusion;
+
+		public Adjusted(bool setTo)
+		{
+			this.normal = setTo;
+			this.metrough = setTo;
+			this.diffuse = setTo;
+			this.lightmap = setTo;
+			this.emissive = setTo;
+			this.occlusion = setTo;
+		}
+	}
+
 	private FileLoader gltfLoader;
 	private Stream loadedGltfStream;
 	private FileLoader binLoader;
@@ -211,6 +231,7 @@ public class ImportExport : MonoBehaviour
 			PopulateImageList();
 			importButton.interactable = CanImport();
 			exportButton.interactable = CanExport();
+			RemoveDuplicates();
 		}
 	}
 
@@ -516,8 +537,190 @@ public class ImportExport : MonoBehaviour
 		}
 	}
 
+	private void Dedup()
+	{
+		var duplicates = new Dictionary<GLTFTexture, GLTFTexture>();
+
+		for (var i = 0; i < gltfRoot.Textures.Count; i++)
+		{
+			var a = gltfRoot.Textures[i];
+
+			if (duplicates.ContainsValue(a)) continue;
+
+			for (var j = 0; j < gltfRoot.Textures.Count; j++)
+			{
+				var b = gltfRoot.Textures[j];
+
+				if (i == j) continue;
+				if (duplicates.ContainsValue(b)) continue;
+
+				if (a.EqualsTexture(b))
+				{
+					duplicates.Add(b, a);
+					print(j + " is a duplicate of " + i);
+				}
+			}
+		}
+
+		// foreach (var kvp in duplicates)
+		// {
+		// 	gltfRoot.Materials.ForEach(mat => {
+		// 		mat.EmissiveTexture
+		// 	});
+		// }
+	}
+
 	private void RemoveDuplicates()
 	{
+		Dictionary<int, List<int>> duplicates = new Dictionary<int, List<int>>();
+		// Dictionary<int, int[]> toRemove = new Dictionary<int, int[]>(); // Index of source, indices of duplicates.
+		List<GLTFTexture> deduped = new List<GLTFTexture>();
+
+
+
+		for (var i = 0; i < gltfRoot.Textures.Count; i++)
+		{
+			gltfRoot.Textures[i].originalIndex = i;
+			var numOfDups = 0;
+			var a = gltfRoot.Textures[i];
+
+			// Skip any index we've already considered a duplicate.
+			if (duplicates.Any(item => item.Value.Any(item2 => item2 == i))) continue;
+
+			for (var j = 0; j < gltfRoot.Textures.Count; j++)
+			{
+				var b = gltfRoot.Textures[j];
+
+				// Don't compare to self.
+				if (i == j) continue;
+				if (a.EqualsTexture(b))
+				{
+					numOfDups++;
+					if (duplicates.ContainsKey(i)) { duplicates[i].Add(j); }
+					else duplicates.Add(i, new List<int> { j });
+				}
+			}
+			// if (numOfDups > 0) print(a.Source.Id + " has " + numOfDups + " duplicates");
+			if (deduped.Any(item => item.EqualsTexture(a))) continue;
+			// print("source: " + a.Source.Id + " Original index: " + a.originalIndex);
+			deduped.Add(a);
+		}
+
+		gltfRoot.Textures = deduped;
+
+		for (var i = 0; i < gltfRoot.Materials.Count; i++)
+		{
+			var mat = gltfRoot.Materials[i];
+
+			var adjusted = new Adjusted(false);
+
+			// Adjust all the indexes found within the final array.
+			for (var j = 0; j < gltfRoot.Textures.Count; j++)
+			{
+				var tex = gltfRoot.Textures[j];
+
+				// Normal Map
+				if (!adjusted.normal && mat.NormalTexture?.Index?.Id == tex.originalIndex)
+				{
+					adjusted.normal = true;
+					mat.NormalTexture.Index.Id = j;
+				}
+
+				// Diffuse (Color) Map
+				if (!adjusted.diffuse && mat.PbrMetallicRoughness.BaseColorTexture?.Index?.Id == tex.originalIndex)
+				{
+					adjusted.diffuse = true;
+					mat.PbrMetallicRoughness.BaseColorTexture.Index.Id = j;
+				}
+
+				// Emissive Map
+				if (!adjusted.emissive && mat.EmissiveTexture?.Index?.Id == tex.originalIndex)
+				{
+					adjusted.emissive = true;
+					mat.EmissiveTexture.Index.Id = j;
+				}
+
+				// Lightmap
+				if (!adjusted.lightmap && mat.Extensions?.ContainsKey(MOZ_lightmapExtensionFactory.EXTENSION_NAME) == true &&
+					((MOZ_lightmapExtension)mat.Extensions[MOZ_lightmapExtensionFactory.EXTENSION_NAME]).LightmapInfo?.Index?.Id == tex.originalIndex)
+				{
+					adjusted.lightmap = true;
+					((MOZ_lightmapExtension)mat.Extensions[MOZ_lightmapExtensionFactory.EXTENSION_NAME]).LightmapInfo.Index.Id = j;
+				}
+
+				// Occlusion Map
+				if (!adjusted.occlusion && mat.OcclusionTexture?.Index?.Id == tex.originalIndex)
+				{
+					adjusted.occlusion = true;
+					mat.OcclusionTexture.Index.Id = j;
+				}
+
+				// Metallic/Roughness Map
+				if (!adjusted.metrough && mat.PbrMetallicRoughness.MetallicRoughnessTexture?.Index?.Id == tex.originalIndex)
+				{
+					adjusted.metrough = true;
+					mat.PbrMetallicRoughness.MetallicRoughnessTexture.Index.Id = j;
+				}
+			}
+
+			// Adjust all the indexes that are duplicates.
+			foreach (var key in duplicates.Keys)
+			{
+				for (var j = 0; j < duplicates[key].Count; j++)
+				{
+					var duplicate = duplicates[key];
+					var index = gltfRoot.Textures.FindIndex(item => item.originalIndex == key);
+					if (index == -1) continue;
+
+					// Normal Map
+					if (!adjusted.normal && duplicate.Any(item => item == mat.NormalTexture?.Index?.Id))
+					{
+						adjusted.normal = true;
+						mat.NormalTexture.Index.Id = index;
+					}
+
+					// Diffuse (Color) Map
+					if (!adjusted.diffuse && duplicate.Any(item => item == mat.PbrMetallicRoughness.BaseColorTexture?.Index?.Id))
+					{
+						adjusted.diffuse = true;
+						mat.PbrMetallicRoughness.BaseColorTexture.Index.Id = index;
+					}
+
+					// Emissive Map
+					if (!adjusted.emissive && duplicate.Any(item => item == mat.EmissiveTexture?.Index?.Id))
+					{
+						adjusted.emissive = true;
+						mat.EmissiveTexture.Index.Id = index;
+					}
+
+					// Lightmap
+					if (!adjusted.lightmap && mat.Extensions?.ContainsKey(MOZ_lightmapExtensionFactory.EXTENSION_NAME) == true &&
+						duplicate.Any(item => item == ((MOZ_lightmapExtension)mat.Extensions[MOZ_lightmapExtensionFactory.EXTENSION_NAME]).LightmapInfo?.Index?.Id))
+					{
+						adjusted.lightmap = true;
+						((MOZ_lightmapExtension)mat.Extensions[MOZ_lightmapExtensionFactory.EXTENSION_NAME]).LightmapInfo.Index.Id = index;
+					}
+
+					// Occlusion Map
+					if (!adjusted.occlusion && duplicate.Any(item => item == mat.OcclusionTexture?.Index?.Id))
+					{
+						adjusted.occlusion = true;
+						mat.OcclusionTexture.Index.Id = index;
+					}
+
+					// Metallic/Roughness Map
+					if (!adjusted.metrough && duplicate.Any(item => item == mat.PbrMetallicRoughness.MetallicRoughnessTexture?.Index?.Id))
+					{
+						adjusted.metrough = true;
+						mat.PbrMetallicRoughness.MetallicRoughnessTexture.Index.Id = index;
+					}
+
+				}
+			}
+		}
+
+		// print("Deduped length: " + deduped.Count);
+
 		// Dictionary<int, int> remap = new Dictionary<int, int>(); // Index of duplicate, index of source.
 		// List<Duplicate> duplicateMap = new List<Duplicate>();
 
@@ -552,8 +755,8 @@ public class ImportExport : MonoBehaviour
 		// 			dupe.duplicates.Add(match.duplicate);
 		// 		}
 
-		// 		// 		// if (remap2.Any(entry => entry.index == match.duplicate ))
-		// 		// 		// 	remap2.Add(new TextureEntry(){ index = match.duplicate, map = match.source, id = match.duplicate.ToString()});
+		// 		// if (remap2.Any(entry => entry.index == match.duplicate ))
+		// 		// 	remap2.Add(new TextureEntry(){ index = match.duplicate, map = match.source, id = match.duplicate.ToString()});
 		// 	}
 		// 	duplicateMap.Add(dupe);
 		// }

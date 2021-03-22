@@ -1,4 +1,5 @@
 using Newtonsoft.Json;
+using System.Reflection;
 
 namespace GLTF.Schema
 {
@@ -16,6 +17,9 @@ namespace GLTF.Schema
 		/// The index of the image used by this texture.
 		/// </summary>
 		public ImageId Source;
+
+		public int originalIndex = -1;
+
 
 		public GLTFTexture()
 		{
@@ -81,5 +85,25 @@ namespace GLTF.Schema
 
 			writer.WriteEndObject();
 		}
+
+		// public override bool Equals(object obj)
+		// {
+		// 	var type = obj.GetType();
+
+		// 	if (obj == null || GetType() != type)
+		// 	{
+		// 		return false;
+		// 	}
+
+		// 	PropertyInfo prop1 = type.GetProperty("Sampler");
+		// 	PropertyInfo prop2 = type.GetProperty("Source");
+
+		// 	SamplerId sampler = (SamplerId)prop1.GetValue(obj);
+		// 	ImageId image = (ImageId)prop2.GetValue(obj);
+
+		// 	return this.Sampler.Id == sampler.Id && this.Source.Id == image.Id;
+		// }
 	}
+
+
 }
