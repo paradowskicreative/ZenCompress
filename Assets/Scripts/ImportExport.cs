@@ -135,6 +135,33 @@ public class ImportExport : MonoBehaviour
 		public int map;
 	}
 
+	public enum Format
+	{
+		BASIS,
+		KTX2
+	}
+
+	public enum SubFormat
+	{
+		ETC1S,
+		UASTC
+	}
+
+	Dictionary<Format, string> extensionNames = new Dictionary<Format, string>()
+	{
+		{ Format.BASIS, MozHubsTextureBasisExtensionFactory.EXTENSION_NAME },
+		{ Format.KTX2, TextureKTX2ExtensionFactory.EXTENSION_NAME },
+	};
+
+	Dictionary<Format, IExtension> extensions = new Dictionary<Format, IExtension>()
+	{
+		{ Format.BASIS, new MozHubsTextureBasisExtension(new ImageId())},
+		{ Format.KTX2, new TextureKTX2Extension(new ImageId())},
+	};
+
+	public Format format;
+	public SubFormat subFormat;
+
 	public bool[] conversionToggles = new bool[]{
 		true,  // Diffuse
 		false, // Normal
@@ -988,7 +1015,18 @@ public class ImportExport : MonoBehaviour
 		List<GLTFImage> imagesToConvert = glbRoot.Images.Except(imagesToAvoid).ToList();
 		List<GLTFTexture> texturesToConvert = glbRoot.Textures.Except(texturesToAvoid).ToList();
 
+		var cachedFormat = format;
 
+		var ext = "";
+		switch(cachedFormat) 
+		{
+			case Format.BASIS:
+				ext = "basis";
+				break;
+			case Format.KTX2:
+				ext = "ktx2";
+				break;
+		}
 
 		var tasks = new List<Task>();
 		SemaphoreSlim maxThread = new SemaphoreSlim(4);
@@ -1000,7 +1038,7 @@ public class ImportExport : MonoBehaviour
 			var filenameWith = Path.GetFileName(nonBasisPath);
 			var filenameWithout = Path.GetFileNameWithoutExtension(nonBasisPath);
 			var nonBasisDirectory = nonBasisPath.Replace(filenameWith, "");
-			var basisPath = Path.Combine(nonBasisDirectory, filenameWithout + ".basis");
+			var basisPath = Path.Combine(nonBasisDirectory, filenameWithout + "." + ext);
 
 			var doesExist = File.Exists(basisPath);
 			print(basisPath + " | " + doesExist);
@@ -1036,11 +1074,25 @@ public class ImportExport : MonoBehaviour
 				else
 					filePath = Path.Combine(directoryPath, image.Uri);
 
+				var texFormat = format == Format.BASIS ? "" : " -ktx2";
+
+				var texSubFormat = subFormat == SubFormat.ETC1S ? "" : " -uastc";
+
 				var input = preserveAlpha ? " -alpha_file " : " -file ";
 
-				var qualityArg = quality == 255 ? "-max_endpoints 16128 -max_selectors 16128" : "-q " + quality.ToString();
+				var qualityArg = "";
+				if (subFormat == SubFormat.ETC1S)
+					qualityArg = quality == 255 ? " -max_endpoints 16128 -max_selectors 16128" : " -q " + quality.ToString();
+				else
+					qualityArg = " -uastc_level " + quality.ToString();
 
-				var argString = qualityArg + " -comp_level " + level.ToString() + " -output_path \"" + outputDir + "\" -file \"" + filePath + "\" -selector_rdo_thresh " + threshold.ToString("0.00") + " -endpoint_rdo_thresh " + threshold.ToString("0.00") + " -mipmap";
+				var rdoThresh = "";
+				if (subFormat == SubFormat.ETC1S)
+					rdoThresh = " -selector_rdo_thresh " + threshold.ToString("0.00") + " -endpoint_rdo_thresh " + threshold.ToString("0.00");
+				else
+					rdoThresh = " -uastc_rdo_l " + threshold.ToString("0.00");
+
+				var argString = texFormat + texSubFormat + qualityArg + rdoThresh + " -comp_level " + level.ToString() + " -output_path \"" + outputDir + "\" -file \"" + filePath + "\" -mipmap";
 
 #if UNITY_EDITOR_OSX || UNITY_STANDALONE_OSX
 				var args = "-c './basisu " + argString + "'";
@@ -1061,7 +1113,7 @@ public class ImportExport : MonoBehaviour
 					{
 						try
 						{
-							msgQueue.Add(new TaskData { msg = "Converting image '" + originalUri + "' to BASIS..." });
+							msgQueue.Add(new TaskData { msg = "Converting image '" + originalUri + "' to " + ext + "..." });
 							await RunProcessAsync(exe, args);
 							// taskTime.Stop();
 							var ttc = DateTime.Now.Subtract(now).TotalSeconds;
@@ -1085,11 +1137,11 @@ public class ImportExport : MonoBehaviour
 					Logging.Log("Finished in " + Mathf.RoundToInt((float)ttc * 100f) / 100f + " seconds.\n");
 				}
 			}
-
-			var ext = image.MimeType.ToLower().Replace("image/", "");
-			image.MimeType = "image/basis";
+		
+			// var ext = image.MimeType.ToLower().Replace("image/", ""); 
+			image.MimeType = "image/" + ext;
 			Regex rgx = new Regex(@"\.(?:.(?!\.))+$");
-			image.Uri = image.Uri.Replace(rgx.Match(image.Uri).Value, ".basis");
+			image.Uri = image.Uri.Replace(rgx.Match(image.Uri).Value, "." + ext);
 
 		}
 
@@ -1102,16 +1154,26 @@ public class ImportExport : MonoBehaviour
 		if (Directory.Exists(tempPath))
 			Directory.Delete(tempPath, true);
 
+		
 
 		foreach (var texture in texturesToConvert)
 		{
-			var moz = new MozHubsTextureBasisExtension(texture.Source ?? new ImageId());
+			// IExtension extension = format == Format.BASIS ? new MozHubsTextureBasisExtension(texture.Source ?? new ImageId()) : ;
+			switch(cachedFormat) {
+				case Format.BASIS:
+					extensions[cachedFormat] = new MozHubsTextureBasisExtension(texture.Source ?? new ImageId()); 
+					break;
+				case Format.KTX2:
+					extensions[cachedFormat] = new TextureKTX2Extension(texture.Source ?? new ImageId());
+					break;
+			}
 
 			if (texture.Extensions == null)
 				texture.Extensions = new Dictionary<string, IExtension>();
 
-			if (!texture.Extensions.ContainsKey(MozHubsTextureBasisExtensionFactory.EXTENSION_NAME))
-				texture.Extensions.Add(MozHubsTextureBasisExtensionFactory.EXTENSION_NAME, moz);
+			if (!texture.Extensions.ContainsKey(extensionNames[cachedFormat]))
+				texture.Extensions.Add(extensionNames[cachedFormat], extensions[cachedFormat]);
+			
 			texture.Source = null;
 
 			if (texture.Sampler == null)
@@ -1129,11 +1191,11 @@ public class ImportExport : MonoBehaviour
 			if (glbRoot.ExtensionsRequired == null)
 				glbRoot.ExtensionsRequired = new List<string>();
 
-			if (!glbRoot.ExtensionsUsed.Contains(MozHubsTextureBasisExtensionFactory.EXTENSION_NAME))
-				glbRoot.ExtensionsUsed.Add(MozHubsTextureBasisExtensionFactory.EXTENSION_NAME);
+			if (!glbRoot.ExtensionsUsed.Contains(extensionNames[cachedFormat]))
+				glbRoot.ExtensionsUsed.Add(extensionNames[cachedFormat]);
 
-			if (!glbRoot.ExtensionsRequired.Contains(MozHubsTextureBasisExtensionFactory.EXTENSION_NAME))
-				glbRoot.ExtensionsRequired.Add(MozHubsTextureBasisExtensionFactory.EXTENSION_NAME);
+			if (!glbRoot.ExtensionsRequired.Contains(extensionNames[cachedFormat]))
+				glbRoot.ExtensionsRequired.Add(extensionNames[cachedFormat]);
 		}
 	}
 

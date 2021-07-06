@@ -69,6 +69,8 @@ namespace GLTF.Schema
 	/// </summary>
 	public class DefaultExtensionFactory : ExtensionFactory
 	{
+		public const string EXTENSION_NAME = "Extension_name";
+
 		public override IExtension Deserialize(GLTFRoot root, JProperty extensionToken)
 		{
 			return new DefaultExtension

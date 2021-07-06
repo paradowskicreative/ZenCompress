@@ -8,14 +8,59 @@ using TMPro;
 public class Options : MonoBehaviour
 {
 	public ImportExport io;
+	public TextMeshProUGUI qualityLabel;
 	public TMP_InputField qualityInput;
+	public TextMeshProUGUI thresholdLabel;
 	public TMP_InputField thresholdInput;
 	public TMP_InputField levelInput;
 	public static Options instance;
 
+	int qualityLimiter = 255;
+	float thresholdLowerLimiter = 1f;
+	float thresholdUpperLimiter = 2f;
+	Int32 previousSubFormat = 0;
+	string previousUASTCQuality = "4";
+	string previousETC1SQuality = "255";
+	string previousUASTCThreshold = "0.75";
+	string previousETC1SThreshold = "1.05";
+
 	void Awake()
 	{
 		instance = this;
+	}
+
+	public void SetTextureFormat(Int32 format)
+	{
+		io.format = (ImportExport.Format)(format < 2 ? 0 : 1);
+		io.subFormat = (ImportExport.SubFormat)(format % 2 == 0 ? 0 : 1);
+
+		if (io.subFormat == ImportExport.SubFormat.UASTC && (Int32)io.subFormat != previousSubFormat) {
+			qualityLabel.text = "Encoding quality [0-4]";
+			thresholdLabel.text = "RDO Threshold [0.2-3.0]";
+			previousETC1SQuality = qualityInput.text;
+			previousETC1SThreshold = thresholdInput.text;
+			qualityInput.text = previousUASTCQuality;
+			io.quality = Int32.Parse(previousUASTCQuality);
+			thresholdInput.text = previousUASTCThreshold;
+			io.threshold = float.Parse(previousUASTCThreshold);
+			qualityLimiter = 4;
+			thresholdLowerLimiter = 0.2f;
+			thresholdUpperLimiter = 3f;
+			previousSubFormat = (Int32)io.subFormat;
+		} else if((Int32)io.subFormat != previousSubFormat) {
+			qualityLabel.text = "Encoding quality [0-255]";
+			thresholdLabel.text = "RDO Threshold [1.0-2.0]";
+			previousUASTCQuality = qualityInput.text;
+			previousUASTCThreshold = thresholdInput.text;
+			qualityInput.text = previousETC1SQuality;
+			io.quality = Int32.Parse(previousETC1SQuality);
+			thresholdInput.text = previousETC1SThreshold;
+			io.threshold = float.Parse(previousETC1SThreshold);
+			qualityLimiter = 255;
+			thresholdLowerLimiter = 1f;
+			thresholdUpperLimiter = 2f;
+			previousSubFormat = (Int32)io.subFormat;
+		}
 	}
 
 	public void SetUseExistingBasis(bool use)
@@ -86,7 +131,7 @@ public class Options : MonoBehaviour
 		try
 		{
 			t = float.Parse(threshold);
-			t = Mathf.Clamp(t, 1f, 2f);
+			t = Mathf.Clamp(t, thresholdLowerLimiter, thresholdUpperLimiter);
 			thresholdInput.text = t.ToString("0.00");
 			io.threshold = t;
 		}
