@@ -36,8 +36,8 @@ public class ImportExport : MonoBehaviour
 	public bool convertLightmaps = false;
 	public bool showPreview = true;
 	public bool useMultithreading = true;
-	public int quality = 255;
-	public float threshold = 1.05f;
+	public int quality = 4;
+	public float threshold = 0.35f;
 	public int level = 2;
 	public bool preserveAlpha = false;
 

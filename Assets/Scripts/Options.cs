@@ -15,10 +15,10 @@ public class Options : MonoBehaviour
 	public TMP_InputField levelInput;
 	public static Options instance;
 
-	int qualityLimiter = 255;
-	float thresholdLowerLimiter = 1f;
-	float thresholdUpperLimiter = 2f;
-	Int32 previousSubFormat = 0;
+	int qualityLimiter = 4;
+	float thresholdLowerLimiter = 0.2f;
+	float thresholdUpperLimiter = 3f;
+	Int32 previousSubFormat = 1;
 	string previousUASTCQuality = "4";
 	string previousETC1SQuality = "255";
 	string previousUASTCThreshold = "0.75";
@@ -31,8 +31,8 @@ public class Options : MonoBehaviour
 
 	public void SetTextureFormat(Int32 format)
 	{
-		io.format = (ImportExport.Format)(format < 2 ? 0 : 1);
-		io.subFormat = (ImportExport.SubFormat)(format % 2 == 0 ? 0 : 1);
+		io.format = (ImportExport.Format)(format < 2 ? 1 : 0);
+		io.subFormat = (ImportExport.SubFormat)(format % 2 == 0 ? 1 : 0);
 
 		if (io.subFormat == ImportExport.SubFormat.UASTC && (Int32)io.subFormat != previousSubFormat) {
 			qualityLabel.text = "Encoding quality [0-4]";
@@ -111,8 +111,9 @@ public class Options : MonoBehaviour
 		try
 		{
 			q = Int32.Parse(quality);
-			if (q > 255)
-				q = 255;
+			int max = io.subFormat == ImportExport.SubFormat.UASTC ? 4 : 255;
+			if (q > max)
+				q = max;
 			else if (q < 0)
 				q = 0;
 

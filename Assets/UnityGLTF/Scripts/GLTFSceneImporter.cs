@@ -47,6 +47,10 @@ namespace UnityGLTF
 		public Vector2[] Uv2;
 		public Vector2[] Uv3;
 		public Vector2[] Uv4;
+		public Vector2[] Uv5;
+		public Vector2[] Uv6;
+		public Vector2[] Uv7;
+		public Vector2[] Uv8;
 		public Color[] Colors;
 		public BoneWeight[] BoneWeights;
 
@@ -905,6 +909,10 @@ namespace UnityGLTF
 					case SemanticProperties.TEXCOORD_1:
 					case SemanticProperties.TEXCOORD_2:
 					case SemanticProperties.TEXCOORD_3:
+					case SemanticProperties.TEXCOORD_4:
+					case SemanticProperties.TEXCOORD_5:
+					case SemanticProperties.TEXCOORD_6:
+					case SemanticProperties.TEXCOORD_7:
 						SchemaExtensions.FlipTexCoordArrayV(ref aa);
 						break;
 				}
@@ -1611,6 +1619,10 @@ namespace UnityGLTF
 				Uv2 = firstPrim.Attributes.ContainsKey(SemanticProperties.TEXCOORD_1) ? new Vector2[totalVertCount] : null,
 				Uv3 = firstPrim.Attributes.ContainsKey(SemanticProperties.TEXCOORD_2) ? new Vector2[totalVertCount] : null,
 				Uv4 = firstPrim.Attributes.ContainsKey(SemanticProperties.TEXCOORD_3) ? new Vector2[totalVertCount] : null,
+				Uv5 = firstPrim.Attributes.ContainsKey(SemanticProperties.TEXCOORD_4) ? new Vector2[totalVertCount] : null,
+				Uv6 = firstPrim.Attributes.ContainsKey(SemanticProperties.TEXCOORD_5) ? new Vector2[totalVertCount] : null,
+				Uv7 = firstPrim.Attributes.ContainsKey(SemanticProperties.TEXCOORD_6) ? new Vector2[totalVertCount] : null,
+				Uv8 = firstPrim.Attributes.ContainsKey(SemanticProperties.TEXCOORD_7) ? new Vector2[totalVertCount] : null,
 				Colors = firstPrim.Attributes.ContainsKey(SemanticProperties.COLOR_0) ? new Color[totalVertCount] : null,
 				BoneWeights = firstPrim.Attributes.ContainsKey(SemanticProperties.WEIGHTS_0) ? new BoneWeight[totalVertCount] : null,
 
@@ -1717,6 +1729,22 @@ namespace UnityGLTF
 			if (meshAttributes.ContainsKey(SemanticProperties.TexCoord[3]))
 			{
 				meshAttributes[SemanticProperties.TexCoord[3]].AccessorContent.AsTexcoords.ToUnityVector2Raw(unityData.Uv4, vertOffset);
+			}
+			if (meshAttributes.ContainsKey(SemanticProperties.TexCoord[4]))
+			{
+				meshAttributes[SemanticProperties.TexCoord[4]].AccessorContent.AsTexcoords.ToUnityVector2Raw(unityData.Uv5, vertOffset);
+			}
+			if (meshAttributes.ContainsKey(SemanticProperties.TexCoord[5]))
+			{
+				meshAttributes[SemanticProperties.TexCoord[5]].AccessorContent.AsTexcoords.ToUnityVector2Raw(unityData.Uv6, vertOffset);
+			}
+			if (meshAttributes.ContainsKey(SemanticProperties.TexCoord[6]))
+			{
+				meshAttributes[SemanticProperties.TexCoord[6]].AccessorContent.AsTexcoords.ToUnityVector2Raw(unityData.Uv7, vertOffset);
+			}
+			if (meshAttributes.ContainsKey(SemanticProperties.TexCoord[7]))
+			{
+				meshAttributes[SemanticProperties.TexCoord[7]].AccessorContent.AsTexcoords.ToUnityVector2Raw(unityData.Uv8, vertOffset);
 			}
 			if (meshAttributes.ContainsKey(SemanticProperties.Color[0]))
 			{
@@ -1859,6 +1887,14 @@ namespace UnityGLTF
 			mesh.uv3 = unityMeshData.Uv3;
 			await YieldOnTimeoutAndThrowOnLowMemory();
 			mesh.uv4 = unityMeshData.Uv4;
+			await YieldOnTimeoutAndThrowOnLowMemory();
+			mesh.uv5 = unityMeshData.Uv5;
+			await YieldOnTimeoutAndThrowOnLowMemory();
+			mesh.uv6 = unityMeshData.Uv6;
+			await YieldOnTimeoutAndThrowOnLowMemory();
+			mesh.uv7 = unityMeshData.Uv7;
+			await YieldOnTimeoutAndThrowOnLowMemory();
+			mesh.uv8 = unityMeshData.Uv8;
 			await YieldOnTimeoutAndThrowOnLowMemory();
 			mesh.colors = unityMeshData.Colors;
 			await YieldOnTimeoutAndThrowOnLowMemory();

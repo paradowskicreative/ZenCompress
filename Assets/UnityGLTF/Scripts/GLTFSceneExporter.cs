@@ -750,7 +750,9 @@ namespace UnityGLTF
 			}
 
 			AccessorId aPosition = null, aNormal = null, aTangent = null,
-				aTexcoord0 = null, aTexcoord1 = null, aColor0 = null;
+				aTexcoord0 = null, aTexcoord1 = null, aTexcoord2 = null,
+				aTexcoord3 = null, aTexcoord4 = null, aTexcoord5 = null,
+				aTexcoord6 = null, aTexcoord7 = null, aColor0 = null;
 				
 			aPosition = ExportAccessor(SchemaExtensions.ConvertVector3CoordinateSpaceAndCopy(meshObj.vertices, SchemaExtensions.CoordinateSpaceConversionScale));
 
@@ -765,6 +767,24 @@ namespace UnityGLTF
 
 			if (meshObj.uv2.Length != 0)
 				aTexcoord1 = ExportAccessor(SchemaExtensions.FlipTexCoordArrayVAndCopy(meshObj.uv2));
+
+			if (meshObj.uv3.Length != 0)
+				aTexcoord0 = ExportAccessor(SchemaExtensions.FlipTexCoordArrayVAndCopy(meshObj.uv3));
+
+			if (meshObj.uv4.Length != 0)
+				aTexcoord1 = ExportAccessor(SchemaExtensions.FlipTexCoordArrayVAndCopy(meshObj.uv4));
+
+			if (meshObj.uv5.Length != 0)
+				aTexcoord0 = ExportAccessor(SchemaExtensions.FlipTexCoordArrayVAndCopy(meshObj.uv5));
+
+			if (meshObj.uv6.Length != 0)
+				aTexcoord1 = ExportAccessor(SchemaExtensions.FlipTexCoordArrayVAndCopy(meshObj.uv6));
+
+			if (meshObj.uv7.Length != 0)
+				aTexcoord0 = ExportAccessor(SchemaExtensions.FlipTexCoordArrayVAndCopy(meshObj.uv7));
+
+			if (meshObj.uv8.Length != 0)
+				aTexcoord1 = ExportAccessor(SchemaExtensions.FlipTexCoordArrayVAndCopy(meshObj.uv8));
 
 			if (meshObj.colors.Length != 0)
 				aColor0 = ExportAccessor(meshObj.colors);
@@ -793,6 +813,18 @@ namespace UnityGLTF
 					primitive.Attributes.Add(SemanticProperties.TEXCOORD_0, aTexcoord0);
 				if (aTexcoord1 != null)
 					primitive.Attributes.Add(SemanticProperties.TEXCOORD_1, aTexcoord1);
+				if (aTexcoord2 != null)
+					primitive.Attributes.Add(SemanticProperties.TEXCOORD_2, aTexcoord2);
+				if (aTexcoord3 != null)
+					primitive.Attributes.Add(SemanticProperties.TEXCOORD_3, aTexcoord3);
+				if (aTexcoord4 != null)
+					primitive.Attributes.Add(SemanticProperties.TEXCOORD_4, aTexcoord4);
+				if (aTexcoord5 != null)
+					primitive.Attributes.Add(SemanticProperties.TEXCOORD_5, aTexcoord5);
+				if (aTexcoord6 != null)
+					primitive.Attributes.Add(SemanticProperties.TEXCOORD_6, aTexcoord6);
+				if (aTexcoord7 != null)
+					primitive.Attributes.Add(SemanticProperties.TEXCOORD_7, aTexcoord7);
 				if (aColor0 != null)
 					primitive.Attributes.Add(SemanticProperties.COLOR_0, aColor0);
 

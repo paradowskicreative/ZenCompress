@@ -776,8 +776,8 @@ MonoBehaviour:
   samplers: []
   textures: []
   images: []
-  format: 0
-  subFormat: 0
+  format: 1
+  subFormat: 1
   conversionToggles: 010000010101
 --- !u!114 &136979731
 MonoBehaviour:
@@ -1075,7 +1075,7 @@ MonoBehaviour:
   m_OnCullStateChanged:
     m_PersistentCalls:
       m_Calls: []
-  m_text: "1.05\u200B"
+  m_text: "0.35\u200B"
   m_isRightToLeft: 0
   m_fontAsset: {fileID: 11400000, guid: d99bd63bea8a0164cac7652dba3c77c9, type: 2}
   m_sharedMaterial: {fileID: 2494452098421203701, guid: d99bd63bea8a0164cac7652dba3c77c9,
@@ -1546,7 +1546,7 @@ MonoBehaviour:
   m_OnCullStateChanged:
     m_PersistentCalls:
       m_Calls: []
-  m_text: RDO Threshold [1.0-2.0]
+  m_text: RDO Threshold [0.2-3.0]
   m_isRightToLeft: 0
   m_fontAsset: {fileID: 11400000, guid: 06d70cb16ff31bb4e9b3cb9ad63c2ca1, type: 2}
   m_sharedMaterial: {fileID: -8946185086842750342, guid: 06d70cb16ff31bb4e9b3cb9ad63c2ca1,
@@ -2598,7 +2598,7 @@ MonoBehaviour:
   m_CaretColor: {r: 0.19607843, g: 0.19607843, b: 0.19607843, a: 1}
   m_CustomCaretColor: 0
   m_SelectionColor: {r: 0.65882355, g: 0.80784315, b: 1, a: 0.7529412}
-  m_Text: 1.05
+  m_Text: 0.35
   m_CaretBlinkRate: 0.85
   m_CaretWidth: 1
   m_ReadOnly: 0
@@ -3338,7 +3338,7 @@ MonoBehaviour:
   m_OnCullStateChanged:
     m_PersistentCalls:
       m_Calls: []
-  m_text: Encoding quality [0-255]
+  m_text: Encoding quality [0-4]
   m_isRightToLeft: 0
   m_fontAsset: {fileID: 11400000, guid: 06d70cb16ff31bb4e9b3cb9ad63c2ca1, type: 2}
   m_sharedMaterial: {fileID: -8946185086842750342, guid: 06d70cb16ff31bb4e9b3cb9ad63c2ca1,
@@ -3546,7 +3546,7 @@ MonoBehaviour:
   m_OnCullStateChanged:
     m_PersistentCalls:
       m_Calls: []
-  m_text: .basis (etc1s)
+  m_text: .ktx2 (uastc)
   m_isRightToLeft: 0
   m_fontAsset: {fileID: 11400000, guid: 8f586378b4e144a9851e7b34d9b748ee, type: 2}
   m_sharedMaterial: {fileID: 2180264, guid: 8f586378b4e144a9851e7b34d9b748ee, type: 2}
@@ -8281,13 +8281,13 @@ MonoBehaviour:
   m_Value: 0
   m_Options:
     m_Options:
-    - m_Text: .basis (etc1s)
-      m_Image: {fileID: 0}
-    - m_Text: .basis (uastc)
+    - m_Text: .ktx2 (uastc)
       m_Image: {fileID: 0}
     - m_Text: .ktx2 (etc1s)
       m_Image: {fileID: 0}
-    - m_Text: .ktx2 (uastc)
+    - m_Text: .basis (uastc)
+      m_Image: {fileID: 0}
+    - m_Text: .basis (etc1s)
       m_Image: {fileID: 0}
   m_OnValueChanged:
     m_PersistentCalls:
@@ -8679,7 +8679,7 @@ MonoBehaviour:
   m_OnCullStateChanged:
     m_PersistentCalls:
       m_Calls: []
-  m_text: "255\u200B"
+  m_text: "4\u200B"
   m_isRightToLeft: 0
   m_fontAsset: {fileID: 11400000, guid: d99bd63bea8a0164cac7652dba3c77c9, type: 2}
   m_sharedMaterial: {fileID: 2494452098421203701, guid: d99bd63bea8a0164cac7652dba3c77c9,
@@ -11152,7 +11152,7 @@ MonoBehaviour:
   m_CaretColor: {r: 0.19607843, g: 0.19607843, b: 0.19607843, a: 1}
   m_CustomCaretColor: 0
   m_SelectionColor: {r: 0.65882355, g: 0.80784315, b: 1, a: 0.7529412}
-  m_Text: 255
+  m_Text: 4
   m_CaretBlinkRate: 0.85
   m_CaretWidth: 1
   m_ReadOnly: 0
@@ -11911,7 +11911,7 @@ MonoBehaviour:
   m_CharacterValidation: 2
   m_RegexValue: 
   m_GlobalPointSize: 18
-  m_CharacterLimit: 0
+  m_CharacterLimit: 1
   m_OnEndEdit:
     m_PersistentCalls:
       m_Calls:
