@@ -27,4 +27,4 @@ The output can then be loaded into, for example, A-Frame's KTX2 loader example, 
 ![image](./docs/running.png)
  
  ## Credits and Licensing
- ZenCompress was created by Ethan Michalicek for Paradowski Creative, and has been open sourced under the MIT license attached in this repo. README documentation and the introductory blog post by James C. Kane.
+ ZenCompress was created by Ethan Michalicek and Paradowski Creative, and has been open sourced under the MIT license attached in this repo.
