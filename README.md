@@ -1,6 +1,8 @@
 # ZenCompress
 A fine-grain GUI texture compression tool for glTF created by Ethan Michalicek and [Paradowski Creative](https://paradowski.com). Read more about this tool and its benefits in [our introductory blog post]().
 
+![image](./docs/capy.png)
+
 ## How to use
 ZenCompress operates on "glTF Separate" exports from Blender, where a geometry .bin, a human-readable .gltf meta file, and texture files are all exported separately. As an example asset, we'll open [this .blend file](./docs/Handle_Glove_v004.blend), which contains test geometry and .png textures for compression.
 
