@@ -1,6 +1,10 @@
 # ZenCompress
 A fine-grain GUI texture compression tool for glTF created by Ethan Michalicek and [Paradowski Creative](https://paradowski.com). Read more about this tool and its benefits in [our introductory blog post](https://paradowski.com/stories/introducing-zencompress-for-gltf).
 
+Alternatively, check out this video walkthrough by technical artist Colin Freeman:
+
+[![A YouTube how-to video by Colin Freeman](https://img.youtube.com/vi/6cXMXlOFwf4/0.jpg)](https://www.youtube.com/watch?v=6cXMXlOFwf4)
+
 ![image](./docs/capy.png)
 
 ## How to use
