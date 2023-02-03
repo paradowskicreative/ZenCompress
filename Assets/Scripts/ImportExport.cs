@@ -121,6 +121,8 @@ public class ImportExport : MonoBehaviour
 
 	private Stopwatch timeToCompletion = new Stopwatch();
 
+	protected HDRSwap hdrSwap = new HDRSwap();
+
 	struct TaskData
 	{
 		public string name;
@@ -270,7 +272,7 @@ public class ImportExport : MonoBehaviour
 		{
 			var texture = gltfRoot.Textures[i];
 			var id = texture.Source.Id;
-			if (previousIds.Contains(id)) continue;
+			if (previousIds.Contains(id) || hdrSwap.texMap.ContainsKey(i)) continue;
 			previousIds.Add(id);
 			var image = gltfRoot.Images[id];
 
@@ -369,6 +371,9 @@ public class ImportExport : MonoBehaviour
 		using (gltfLoader.thisStream)
 		{
 			await LoadJson(filename);
+
+			hdrSwap.SwapOut(gltfRoot);
+
 			if (!gltfRoot.IsGLB)
 			{
 				var binPath = Path.Combine(directoryPath, gltfRoot.Buffers[0].Uri);
@@ -418,6 +423,7 @@ public class ImportExport : MonoBehaviour
 	private void PrepGLBRoot()
 	{
 		glbRoot = new GLTFRoot(gltfRoot);
+		hdrSwap.SwapIn(glbRoot);
 		buffer = new GLTFBuffer();
 		glbRoot.Buffers = new List<GLTFBuffer>();
 		bufferId = new BufferId
@@ -1012,13 +1018,22 @@ public class ImportExport : MonoBehaviour
 				texturesToAvoid.Add(tex);
 		}
 
+		foreach (KeyValuePair<int, string> entry in hdrSwap.hdrMap)
+		{
+			imagesToAvoid.Add(glbRoot.Images[entry.Key]);
+		}
+		foreach (KeyValuePair<int, IExtension> entry in hdrSwap.texMap)
+		{
+			texturesToAvoid.Add(glbRoot.Textures[entry.Key]);
+		}
+
 		List<GLTFImage> imagesToConvert = glbRoot.Images.Except(imagesToAvoid).ToList();
 		List<GLTFTexture> texturesToConvert = glbRoot.Textures.Except(texturesToAvoid).ToList();
 
 		var cachedFormat = format;
 
 		var ext = "";
-		switch(cachedFormat) 
+		switch (cachedFormat)
 		{
 			case Format.BASIS:
 				ext = "basis";
@@ -1137,7 +1152,7 @@ public class ImportExport : MonoBehaviour
 					Logging.Log("Finished in " + Mathf.RoundToInt((float)ttc * 100f) / 100f + " seconds.\n");
 				}
 			}
-		
+
 			// var ext = image.MimeType.ToLower().Replace("image/", ""); 
 			image.MimeType = "image/" + ext;
 			Regex rgx = new Regex(@"\.(?:.(?!\.))+$");
@@ -1154,14 +1169,15 @@ public class ImportExport : MonoBehaviour
 		if (Directory.Exists(tempPath))
 			Directory.Delete(tempPath, true);
 
-		
+
 
 		foreach (var texture in texturesToConvert)
 		{
 			// IExtension extension = format == Format.BASIS ? new MozHubsTextureBasisExtension(texture.Source ?? new ImageId()) : ;
-			switch(cachedFormat) {
+			switch (cachedFormat)
+			{
 				case Format.BASIS:
-					extensions[cachedFormat] = new MozHubsTextureBasisExtension(texture.Source ?? new ImageId()); 
+					extensions[cachedFormat] = new MozHubsTextureBasisExtension(texture.Source ?? new ImageId());
 					break;
 				case Format.KTX2:
 					extensions[cachedFormat] = new TextureKTX2Extension(texture.Source ?? new ImageId());
@@ -1173,7 +1189,7 @@ public class ImportExport : MonoBehaviour
 
 			if (!texture.Extensions.ContainsKey(extensionNames[cachedFormat]))
 				texture.Extensions.Add(extensionNames[cachedFormat], extensions[cachedFormat]);
-			
+
 			texture.Source = null;
 
 			if (texture.Sampler == null)
