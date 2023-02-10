@@ -260,7 +260,6 @@ public class ImportExport : MonoBehaviour
 			PopulateImageList();
 			importButton.interactable = CanImport();
 			exportButton.interactable = CanExport();
-			RemoveDuplicates();
 		}
 	}
 
@@ -372,6 +371,7 @@ public class ImportExport : MonoBehaviour
 		{
 			await LoadJson(filename);
 
+			RemoveDuplicates(gltfRoot);
 			hdrSwap.SwapOut(gltfRoot);
 
 			if (!gltfRoot.IsGLB)
@@ -424,6 +424,7 @@ public class ImportExport : MonoBehaviour
 	{
 		glbRoot = new GLTFRoot(gltfRoot);
 		hdrSwap.SwapIn(glbRoot);
+		// RemoveDuplicates(glbRoot);
 		buffer = new GLTFBuffer();
 		glbRoot.Buffers = new List<GLTFBuffer>();
 		bufferId = new BufferId
@@ -603,7 +604,7 @@ public class ImportExport : MonoBehaviour
 		// }
 	}
 
-	private void RemoveDuplicates()
+	private void RemoveDuplicates(GLTFRoot root)
 	{
 		Dictionary<int, List<int>> duplicates = new Dictionary<int, List<int>>();
 		// Dictionary<int, int[]> toRemove = new Dictionary<int, int[]>(); // Index of source, indices of duplicates.
@@ -611,18 +612,18 @@ public class ImportExport : MonoBehaviour
 
 
 
-		for (var i = 0; i < gltfRoot.Textures.Count; i++)
+		for (var i = 0; i < root.Textures.Count; i++)
 		{
-			gltfRoot.Textures[i].originalIndex = i;
+			root.Textures[i].originalIndex = i;
 			var numOfDups = 0;
-			var a = gltfRoot.Textures[i];
+			var a = root.Textures[i];
 
 			// Skip any index we've already considered a duplicate.
 			if (duplicates.Any(item => item.Value.Any(item2 => item2 == i))) continue;
 
-			for (var j = 0; j < gltfRoot.Textures.Count; j++)
+			for (var j = 0; j < root.Textures.Count; j++)
 			{
-				var b = gltfRoot.Textures[j];
+				var b = root.Textures[j];
 
 				// Don't compare to self.
 				if (i == j) continue;
@@ -639,18 +640,18 @@ public class ImportExport : MonoBehaviour
 			deduped.Add(a);
 		}
 
-		gltfRoot.Textures = deduped;
+		root.Textures = deduped;
 
-		for (var i = 0; i < gltfRoot.Materials.Count; i++)
+		for (var i = 0; i < root.Materials.Count; i++)
 		{
-			var mat = gltfRoot.Materials[i];
+			var mat = root.Materials[i];
 
 			var adjusted = new Adjusted(false);
 
 			// Adjust all the indexes found within the final array.
-			for (var j = 0; j < gltfRoot.Textures.Count; j++)
+			for (var j = 0; j < root.Textures.Count; j++)
 			{
-				var tex = gltfRoot.Textures[j];
+				var tex = root.Textures[j];
 
 				// Normal Map
 				if (!adjusted.normal && mat.NormalTexture?.Index?.Id == tex.originalIndex)
@@ -702,7 +703,7 @@ public class ImportExport : MonoBehaviour
 				for (var j = 0; j < duplicates[key].Count; j++)
 				{
 					var duplicate = duplicates[key];
-					var index = gltfRoot.Textures.FindIndex(item => item.originalIndex == key);
+					var index = root.Textures.FindIndex(item => item.originalIndex == key);
 					if (index == -1) continue;
 
 					// Normal Map
@@ -1013,7 +1014,7 @@ public class ImportExport : MonoBehaviour
 			if (img != null)
 				imagesToAvoid.Add(img);
 
-			var texes = glbRoot.Textures.Where(texture => texture.Source.Id == texInst.imageIndex && !texInst.toggled);
+			var texes = glbRoot.Textures.Where(texture => texture.Source?.Id == texInst.imageIndex && !texInst.toggled);
 			foreach (var tex in texes)
 				texturesToAvoid.Add(tex);
 		}

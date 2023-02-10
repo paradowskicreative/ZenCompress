@@ -29,7 +29,7 @@ public class HDRSwap
 		});
 		gltfRoot.Textures.ForEach(texture =>
 		{
-			if (texture.Extensions.ContainsKey("MOZ_texture_rgbe"))
+			if (texture.Extensions != null && texture.Extensions.ContainsKey("MOZ_texture_rgbe"))
 			{
 				int index = gltfRoot.Textures.IndexOf(texture);
 				texMap.Add(index, texture.Extensions["MOZ_texture_rgbe"]);
